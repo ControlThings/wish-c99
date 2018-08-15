@@ -1,6 +1,6 @@
 #pragma once
 
-#include "stdint.h"
+#include <stdint.h>
 
 #define RINGBUFFER_STATE_OK      (0)
 #define RINGBUFFER_STATE_WAIT    (1)
@@ -69,6 +69,10 @@ uint16_t ring_buffer_read(ring_buffer_t*  buf, uint8_t* data, uint16_t len);
 uint16_t ring_buffer_skip(ring_buffer_t*  buf, uint16_t len);
 
 uint16_t ring_buffer_peek(ring_buffer_t*  buf, uint8_t* data, uint16_t len);
+
+#ifdef _WIN32
+#undef min /* For some reason the mingw system defines a macro named "min", when it should not. This is to protect from the name clash. */
+#endif
 
 /* This function returns the smaller of two values */
 uint16_t min(uint16_t a, uint16_t b);
