@@ -26,7 +26,6 @@
 #include "wish_core_rpc.h"
 #include "wish_identity.h"
 #include "wish_time.h"
-#include "bson_visit.h"
 #include "wish_debug.h"
 
 #include "fs_port.h"
@@ -41,10 +40,6 @@
 wish_core_t core_inst;
 
 wish_core_t* core = &core_inst;
-
-void hw_init(void);
-
-extern wish_connection_t wish_context_pool[];  /* Defined in wish_io.c */
 
 void error(const char *msg)
 {
@@ -102,7 +97,6 @@ void connect_fail_cb(wish_connection_t* connection) {
 int wish_open_connection(wish_core_t* core, wish_connection_t* connection, wish_ip_addr_t *ip, uint16_t port, bool relaying) {
     connection->core = core;
     
-    //printf("should start connect\n");
     int *sockfd_ptr = malloc(sizeof(int));
     if (sockfd_ptr == NULL) {
         printf("Malloc fail");
@@ -115,7 +109,6 @@ int wish_open_connection(wish_core_t* core, wish_connection_t* connection, wish_
 
     wish_core_register_send(core, connection, write_to_socket, sockfd_ptr);
 
-    //printf("Opening connection sockfd %i\n", sockfd);
     if (sockfd < 0) {
         perror("socket() returns error:");
         exit(1);
@@ -178,12 +171,7 @@ char usage_str[] = "Wish Core " WISH_CORE_VERSION_STRING
     -p <port> listen for incoming connections at this TCP port\n\
     -r connect to a relay server, for accepting incoming connections via the relay.\n\
 \n\
-    -a <port> start \"App TCP\" interface server at port\n\
-\n\
-    Direct client connection:\n\
-    -c <ip_addr> open a direct client connection to this IP addr\n\
-    -C <port> use specified TCP destination port when connecting as direct client\n\
-    -R <alias> The remote party's alias name (in local contact DB)\n";
+    -a <port> start \"App TCP\" interface server at port";
 
 static void print_usage(char *executable_name) {
     printf(usage_str, executable_name);
@@ -196,15 +184,6 @@ bool advertize_own_uid = true;
 bool skip_connection_acl = false;
 /* -l Start to listen to adverts, and connect when advert is received */
 bool listen_to_adverts = true;
-
-/* -c <addr> Start as a client, connecting to a specified addr */
-bool as_client = false;
-struct in_addr peer_addr;
-uint16_t peer_port;
-/* -R remote identity's name */
-char* remote_id_alias = NULL;
-/* When as_client is true, the remote identity to be contacted is here */
-wish_identity_t remote_identity;
 
 /* -s Accept incoming connections  */
 bool as_server = true;
@@ -245,23 +224,6 @@ static void process_cmdline_opts(int argc, char** argv) {
         case 'l':
             printf("Will not listen to wld broadcasts!\n");
             listen_to_adverts = false;
-            break;
-        case 'c':
-            //printf("Would start as client to ip %s\n", optarg);
-            if (inet_pton(AF_INET, optarg, &peer_addr) == 0) {
-                printf("Badly formmet IP addr\n");
-                exit(1);
-            }
-            as_client = true;
-            break;
-        case 'C':
-            peer_port = atoi(optarg);
-            break;
-        case 'R':
-            /* -R is to be used mainly with -c so that the remote ID can
-             * be provided */ 
-            //printf("Remote identity %s\n", optarg);
-            remote_id_alias = strdup(optarg);
             break;
         case 's':
             //printf("Would start as server\n");
