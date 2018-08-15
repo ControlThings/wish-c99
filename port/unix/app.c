@@ -50,7 +50,7 @@ void error(const char *msg)
 int write_to_socket(wish_connection_t* connection, unsigned char* buffer, int len) {
     int retval = 0;
     int sockfd = *((int *) connection->send_arg);
-    int n = write(sockfd,buffer,len);
+    int n = write(sockfd,buffer,len); /* FIXME add support for partial write here. Now we fail if there is not enough space in the OS's TCP buffer. */
     
     if (n < 0) {
          printf("ERROR writing to socket: %s", strerror(errno));
@@ -462,17 +462,6 @@ int main(int argc, char** argv) {
     // Will provide some random, but not to be considered cryptographically secure
     seed_random_init();
     
-#if 0
-    /* Tests for parsing IP addr */
-    char *url = "wish://192.168.255.255:3333";
-    uint8_t ip[4];
-    wish_parse_transport_ip(url, strlen(url), ip);
-    wish_debug_print_array(LOG_CRITICAL, ip, 4);
-    url = "wish://11.1.0.1:23";
-    wish_parse_transport_ip(url, strlen(url), ip);
-    wish_debug_print_array(LOG_CRITICAL, ip, 4);
-#endif
-
     /* Process command line options */
     if (argc >= 2) {
         //printf("Parsing command line options.\n");
@@ -489,7 +478,7 @@ int main(int argc, char** argv) {
         skip_connection_acl = false;
     }
 
-    /* Iniailise Wish core (RPC servers) */
+    /* Initialize Wish core (RPC servers) */
     wish_core_init(core);
 
     core->config_skip_connection_acl = skip_connection_acl;
@@ -510,22 +499,12 @@ int main(int argc, char** argv) {
     }
 #endif
 
-#if 0
-    wish_app_mist_modbus_init();
-    wish_app_mist_example_init();
-#endif
-    //wish_app_chat_init();
-
-    
-    
-    
-
     while (1) {
-        /* The filedescriptor to be polled for reading */
+        /* The file descriptors to be polled for reading */
         fd_set rfds;
-        /* The filedescriptor to be polled for writing */
+        /* The file descriptors to be polled for writing */
         fd_set wfds;
-        /* The filedescriptor monitored for exceptions */
+        /* The file descriptors monitored for exceptions */
         fd_set exceptfds;
         
         FD_ZERO(&rfds);
@@ -893,8 +872,6 @@ int main(int argc, char** argv) {
             periodic_timestamp = time(NULL);
             wish_time_report_periodic(core);
         }
-
-        //mist_follow_task();
     }
 
     return 0;
