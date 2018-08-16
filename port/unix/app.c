@@ -32,6 +32,7 @@
 #include "wish_relay_client.h"
 
 #include "wish_port_config.h"
+#include "port_select.h"
 
 #ifdef WITH_APP_TCP_SERVER
 #include "app_server.h"
@@ -413,11 +414,7 @@ void setup_wish_server(wish_core_t* core) {
     }
 }
 
-static void update_max_fd(int fd, int *max_fd) {
-    if (fd >= *max_fd) {
-        *max_fd = fd + 1;
-    }
-}
+
 
 static int seed_random_init() {
     unsigned int randval;
@@ -500,29 +497,14 @@ int main(int argc, char** argv) {
 #endif
 
     while (1) {
-        /* The file descriptors to be polled for reading */
-        fd_set rfds;
-        /* The file descriptors to be polled for writing */
-        fd_set wfds;
-        /* The file descriptors monitored for exceptions */
-        fd_set exceptfds;
+        port_select_reset();
         
-        FD_ZERO(&rfds);
-        FD_ZERO(&wfds);
-        FD_ZERO(&exceptfds);
-
-        /* This variable holds the largest socket fd + 1. It must be
-         * updated every time new fd is added to either of the sets */
-        int max_fd = 0;
-
         if (as_server) {
-            FD_SET(serverfd, &rfds);
-            update_max_fd(serverfd, &max_fd);
+            port_select_fd_set_readable(serverfd);
         }
 
         if (listen_to_adverts) {
-            FD_SET(wld_fd, &rfds);
-            update_max_fd(wld_fd, &max_fd);
+            port_select_fd_set_readable(wld_fd);
         }
 
         if (as_relay_client) {
@@ -531,31 +513,28 @@ int main(int argc, char** argv) {
             LL_FOREACH(core->relay_db, relay) {
                 if (relay->curr_state == WISH_RELAY_CLIENT_CONNECTING) {
                     if (relay->sockfd != -1) {
-                        FD_SET(relay->sockfd, &wfds);
+                        port_select_fd_set_writable(relay->sockfd);
                     }
-                    update_max_fd(relay->sockfd, &max_fd);
                 }
                 else if (relay->curr_state == WISH_RELAY_CLIENT_WAIT_RECONNECT) {
                     /* connect to relay server has failed or disconnected and we wait some time before retrying */
                 }
                 else if (relay->curr_state != WISH_RELAY_CLIENT_INITIAL) {
                     if (relay->sockfd != -1) {
-                        FD_SET(relay->sockfd, &rfds);
+                        port_select_fd_set_readable(relay->sockfd);
                     }
-                    update_max_fd(relay->sockfd, &max_fd);
                 }
             }
         }
 
 #ifdef WITH_APP_TCP_SERVER
         if (as_app_server) {
-            FD_SET(app_serverfd, &rfds);
-            update_max_fd(app_serverfd, &max_fd);
+            port_select_fd_set_readable(app_serverfd);
+    
             int i;
             for (i = 0; i < NUM_APP_CONNECTIONS; i++) {
                 if (app_states[i] == APP_CONNECTION_CONNECTED) {
-                    FD_SET(app_fds[i], &rfds);
-                    update_max_fd(app_fds[i], &max_fd);
+                    port_select_fd_set_readable(app_fds[i]);
                 }
             }
         }
@@ -572,33 +551,18 @@ int main(int argc, char** argv) {
                 /* If the socket has currently a pending connect(), set
                  * the socket in the set of writable FDs so that we can
                  * detect when connect() is ready */
-                FD_SET(sockfd, &wfds);
+                port_select_fd_set_writable(sockfd);
             }
             else {
-                FD_SET(sockfd, &rfds);
-            }
-            update_max_fd(sockfd, &max_fd);
-        }
-
-        struct timeval tv;
-        tv.tv_sec = 0;
-        tv.tv_usec = 100000;
-#if 0
-        for (i = 0; i < max_fd; i++) {
-            if (FD_ISSET(i, &rfds)) {
-                FD_SET(i, &exceptfds);
-            }
-            if (FD_ISSET(i, &wfds)) {
-                FD_SET(i, &exceptfds);
+                port_select_fd_set_readable(sockfd);
             }
         }
-#endif
 
-        int select_ret = select(max_fd, &rfds, &wfds, &exceptfds, &tv);
+        int select_ret = port_select();
 
         if (select_ret > 0) {
 
-            if (FD_ISSET(wld_fd, &rfds)) {
+            if (port_select_fd_is_readable(wld_fd)) {
                 read_wish_local_discovery();
             }
 
@@ -608,7 +572,7 @@ int main(int argc, char** argv) {
                 LL_FOREACH(core->relay_db, relay) {
                 
                     /* Note: Before select() we added fd to be checked for writability, if the relay fd was in this state. Now we need to check writability under the same condition */
-                    if (FD_ISSET(relay->sockfd, &wfds) && relay->curr_state ==  WISH_RELAY_CLIENT_CONNECTING) {
+                    if (port_select_fd_is_writable(relay->sockfd) && relay->curr_state ==  WISH_RELAY_CLIENT_CONNECTING) {
                         int connect_error = 0;
                         socklen_t connect_error_len = sizeof(connect_error);
                         if (getsockopt(relay->sockfd, SOL_SOCKET, SO_ERROR, 
@@ -632,7 +596,7 @@ int main(int argc, char** argv) {
                             relay->sockfd = -1;
                         }
                     }
-                    else if (FD_ISSET(relay->sockfd, &rfds) && relay->curr_state != WISH_RELAY_CLIENT_INITIAL) { /* Note: Before select() we added fd to be checked for readability, if the relay fd was in some other state than its initial state. Now we need to check writability under the same condition */
+                    else if (port_select_fd_is_readable(relay->sockfd) && relay->curr_state != WISH_RELAY_CLIENT_INITIAL) { /* Note: Before select() we added fd to be checked for readability, if the relay fd was in some other state than its initial state. Now we need to check writability under the same condition */
                         uint8_t byte;   /* That's right, we read just one
                             byte at a time! */
                         int read_len = read(relay->sockfd, &byte, 1);
@@ -658,7 +622,7 @@ int main(int argc, char** argv) {
 
 #ifdef WITH_APP_TCP_SERVER
             if (as_app_server) {
-                if (FD_ISSET(app_serverfd, &rfds)) {
+                if (port_select_fd_is_readable(app_serverfd)) {
                     /* New connection to app server port */
                     //printf("Detected incoming App connection\n");
                     int newsockfd = accept(app_serverfd, NULL, NULL);
@@ -690,7 +654,7 @@ int main(int argc, char** argv) {
                         /* If the app state is something else than "app connected", then don't do anything. */
                         continue;
                     }
-                    if (FD_ISSET(app_fds[i], &rfds)) {
+                    if (port_select_fd_is_readable(app_fds[i])) {
                         /* Existing App connection has become readable */
                         size_t buffer_len = 100;
                         uint8_t buffer[buffer_len];
@@ -722,7 +686,7 @@ int main(int argc, char** argv) {
                     continue;
                 }
                 int sockfd = *((int *)ctx->send_arg);
-                if (FD_ISSET(sockfd, &rfds)) {
+                if (port_select_fd_is_readable(sockfd)) {
                     /* The Wish connection socket is now readable. Data
                      * can be read without blocking */
                     int rb_free = wish_core_get_rx_buffer_free(core, ctx);
@@ -761,7 +725,7 @@ int main(int argc, char** argv) {
                         wish_core_signal_tcp_event(core, ctx, TCP_DISCONNECTED);
                     }
                 }
-                if (FD_ISSET(sockfd, &wfds)) {
+                if (port_select_fd_is_writable(sockfd)) {
                     /* The Wish connection socket is now writable. This
                      * means that a previous connect succeeded. (because
                      * normally we don't select for socket writability!)
@@ -805,7 +769,7 @@ int main(int argc, char** argv) {
 
             /* Check for incoming Wish connections to our server */
             if (as_server) {
-                if (FD_ISSET(serverfd, &rfds)) {
+                if (port_select_fd_is_readable(serverfd)) {
                     //printf("Detected incoming connection!\n");
                     int newsockfd = accept(serverfd, NULL, NULL);
                     if (newsockfd < 0) {
