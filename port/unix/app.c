@@ -34,13 +34,13 @@
 #include "wish_core_rpc.h"
 #include "wish_identity.h"
 #include "wish_time.h"
-#include "bson_visit.h"
 #include "wish_debug.h"
 
 #include "fs_port.h"
 #include "wish_relay_client.h"
 
 #include "wish_port_config.h"
+#include "port_select.h"
 
 #ifdef WITH_APP_TCP_SERVER
 #include "app_server.h"
@@ -49,10 +49,6 @@
 wish_core_t core_inst;
 
 wish_core_t* core = &core_inst;
-
-void hw_init(void);
-
-extern wish_connection_t wish_context_pool[];  /* Defined in wish_io.c */
 
 void error(const char *msg)
 {
@@ -63,7 +59,7 @@ void error(const char *msg)
 int write_to_socket(wish_connection_t* connection, unsigned char* buffer, int len) {
     int retval = 0;
     int sockfd = *((int *) connection->send_arg);
-    int n = write(sockfd,buffer,len);
+    int n = write(sockfd,buffer,len); /* FIXME add support for partial write here. Now we fail if there is not enough space in the OS's TCP buffer. */
     
     if (n < 0) {
          printf("ERROR writing to socket: %s", strerror(errno));
@@ -118,7 +114,6 @@ void connect_fail_cb(wish_connection_t* connection) {
 int wish_open_connection(wish_core_t* core, wish_connection_t* connection, wish_ip_addr_t *ip, uint16_t port, bool relaying) {
     connection->core = core;
     
-    //printf("should start connect\n");
     int *sockfd_ptr = malloc(sizeof(int));
     if (sockfd_ptr == NULL) {
         printf("Malloc fail");
@@ -131,7 +126,6 @@ int wish_open_connection(wish_core_t* core, wish_connection_t* connection, wish_
 
     wish_core_register_send(core, connection, write_to_socket, sockfd_ptr);
 
-    //printf("Opening connection sockfd %i\n", sockfd);
     if (sockfd < 0) {
         perror("socket() returns error:");
         exit(1);
@@ -194,12 +188,7 @@ char usage_str[] = "Wish Core " WISH_CORE_VERSION_STRING
     -p <port> listen for incoming connections at this TCP port\n\
     -r connect to a relay server, for accepting incoming connections via the relay.\n\
 \n\
-    -a <port> start \"App TCP\" interface server at port\n\
-\n\
-    Direct client connection:\n\
-    -c <ip_addr> open a direct client connection to this IP addr\n\
-    -C <port> use specified TCP destination port when connecting as direct client\n\
-    -R <alias> The remote party's alias name (in local contact DB)\n";
+    -a <port> start \"App TCP\" interface server at port";
 
 static void print_usage(char *executable_name) {
     printf(usage_str, executable_name);
@@ -212,15 +201,6 @@ bool advertize_own_uid = true;
 bool skip_connection_acl = false;
 /* -l Start to listen to adverts, and connect when advert is received */
 bool listen_to_adverts = true;
-
-/* -c <addr> Start as a client, connecting to a specified addr */
-bool as_client = false;
-struct in_addr peer_addr;
-uint16_t peer_port;
-/* -R remote identity's name */
-char* remote_id_alias = NULL;
-/* When as_client is true, the remote identity to be contacted is here */
-wish_identity_t remote_identity;
 
 /* -s Accept incoming connections  */
 bool as_server = true;
@@ -261,27 +241,6 @@ static void process_cmdline_opts(int argc, char** argv) {
         case 'l':
             printf("Will not listen to wld broadcasts!\n");
             listen_to_adverts = false;
-            break;
-        case 'c':
-            //printf("Would start as client to ip %s\n", optarg);
-#ifdef _WIN32
-            if (inet_pton(AF_INET, optarg, (char*)&peer_addr) == 0) {
-#else
-            if (inet_pton(AF_INET, optarg, &peer_addr) == 0) {
-#endif
-                printf("Badly formmet IP addr\n");
-                exit(1);
-            }
-            as_client = true;
-            break;
-        case 'C':
-            peer_port = atoi(optarg);
-            break;
-        case 'R':
-            /* -R is to be used mainly with -c so that the remote ID can
-             * be provided */ 
-            //printf("Remote identity %s\n", optarg);
-            remote_id_alias = strdup(optarg);
             break;
         case 's':
             //printf("Would start as server\n");
@@ -483,11 +442,7 @@ void setup_wish_server(wish_core_t* core) {
     }
 }
 
-static void update_max_fd(int fd, int *max_fd) {
-    if (fd >= *max_fd) {
-        *max_fd = fd + 1;
-    }
-}
+
 
 #ifdef _WIN32
 HCRYPTPROV crypt_prov;
@@ -570,17 +525,6 @@ int main(int argc, char** argv) {
     // Will provide some random, but not to be considered cryptographically secure
     seed_random_init();
     
-#if 0
-    /* Tests for parsing IP addr */
-    char *url = "wish://192.168.255.255:3333";
-    uint8_t ip[4];
-    wish_parse_transport_ip(url, strlen(url), ip);
-    wish_debug_print_array(LOG_CRITICAL, ip, 4);
-    url = "wish://11.1.0.1:23";
-    wish_parse_transport_ip(url, strlen(url), ip);
-    wish_debug_print_array(LOG_CRITICAL, ip, 4);
-#endif
-
     /* Process command line options */
     if (argc >= 2) {
         //printf("Parsing command line options.\n");
@@ -597,7 +541,7 @@ int main(int argc, char** argv) {
         skip_connection_acl = false;
     }
 
-    /* Iniailise Wish core (RPC servers) */
+    /* Initialize Wish core (RPC servers) */
     wish_core_init(core);
 
     core->config_skip_connection_acl = skip_connection_acl;
@@ -618,40 +562,15 @@ int main(int argc, char** argv) {
     }
 #endif
 
-#if 0
-    wish_app_mist_modbus_init();
-    wish_app_mist_example_init();
-#endif
-    //wish_app_chat_init();
-
-    
-    
-    
-
     while (1) {
-        /* The filedescriptor to be polled for reading */
-        fd_set rfds;
-        /* The filedescriptor to be polled for writing */
-        fd_set wfds;
-        /* The filedescriptor monitored for exceptions */
-        fd_set exceptfds;
+        port_select_reset();
         
-        FD_ZERO(&rfds);
-        FD_ZERO(&wfds);
-        FD_ZERO(&exceptfds);
-
-        /* This variable holds the largest socket fd + 1. It must be
-         * updated every time new fd is added to either of the sets */
-        int max_fd = 0;
-
         if (as_server) {
-            FD_SET(serverfd, &rfds);
-            update_max_fd(serverfd, &max_fd);
+            port_select_fd_set_readable(serverfd);
         }
 
         if (listen_to_adverts) {
-            FD_SET(wld_fd, &rfds);
-            update_max_fd(wld_fd, &max_fd);
+            port_select_fd_set_readable(wld_fd);
         }
 
         if (as_relay_client) {
@@ -660,31 +579,28 @@ int main(int argc, char** argv) {
             LL_FOREACH(core->relay_db, relay) {
                 if (relay->curr_state == WISH_RELAY_CLIENT_CONNECTING) {
                     if (relay->sockfd != -1) {
-                        FD_SET(relay->sockfd, &wfds);
+                        port_select_fd_set_writable(relay->sockfd);
                     }
-                    update_max_fd(relay->sockfd, &max_fd);
                 }
                 else if (relay->curr_state == WISH_RELAY_CLIENT_WAIT_RECONNECT) {
                     /* connect to relay server has failed or disconnected and we wait some time before retrying */
                 }
                 else if (relay->curr_state != WISH_RELAY_CLIENT_INITIAL) {
                     if (relay->sockfd != -1) {
-                        FD_SET(relay->sockfd, &rfds);
+                        port_select_fd_set_readable(relay->sockfd);
                     }
-                    update_max_fd(relay->sockfd, &max_fd);
                 }
             }
         }
 
 #ifdef WITH_APP_TCP_SERVER
         if (as_app_server) {
-            FD_SET(app_serverfd, &rfds);
-            update_max_fd(app_serverfd, &max_fd);
+            port_select_fd_set_readable(app_serverfd);
+    
             int i;
             for (i = 0; i < NUM_APP_CONNECTIONS; i++) {
                 if (app_states[i] == APP_CONNECTION_CONNECTED) {
-                    FD_SET(app_fds[i], &rfds);
-                    update_max_fd(app_fds[i], &max_fd);
+                    port_select_fd_set_readable(app_fds[i]);
                 }
             }
         }
@@ -701,33 +617,18 @@ int main(int argc, char** argv) {
                 /* If the socket has currently a pending connect(), set
                  * the socket in the set of writable FDs so that we can
                  * detect when connect() is ready */
-                FD_SET(sockfd, &wfds);
+                port_select_fd_set_writable(sockfd);
             }
             else {
-                FD_SET(sockfd, &rfds);
-            }
-            update_max_fd(sockfd, &max_fd);
-        }
-
-        struct timeval tv;
-        tv.tv_sec = 0;
-        tv.tv_usec = 100000;
-#if 0
-        for (i = 0; i < max_fd; i++) {
-            if (FD_ISSET(i, &rfds)) {
-                FD_SET(i, &exceptfds);
-            }
-            if (FD_ISSET(i, &wfds)) {
-                FD_SET(i, &exceptfds);
+                port_select_fd_set_readable(sockfd);
             }
         }
-#endif
 
-        int select_ret = select(max_fd, &rfds, &wfds, &exceptfds, &tv);
+        int select_ret = port_select();
 
         if (select_ret > 0) {
 
-            if (FD_ISSET(wld_fd, &rfds)) {
+            if (port_select_fd_is_readable(wld_fd)) {
                 read_wish_local_discovery();
             }
 
@@ -737,7 +638,7 @@ int main(int argc, char** argv) {
                 LL_FOREACH(core->relay_db, relay) {
                 
                     /* Note: Before select() we added fd to be checked for writability, if the relay fd was in this state. Now we need to check writability under the same condition */
-                    if (FD_ISSET(relay->sockfd, &wfds) && relay->curr_state ==  WISH_RELAY_CLIENT_CONNECTING) {
+                    if (port_select_fd_is_writable(relay->sockfd) && relay->curr_state ==  WISH_RELAY_CLIENT_CONNECTING) {
 #ifdef _WIN32
                         char connect_error = 0;
 #else
@@ -765,7 +666,7 @@ int main(int argc, char** argv) {
                             relay->sockfd = -1;
                         }
                     }
-                    else if (FD_ISSET(relay->sockfd, &rfds) && relay->curr_state != WISH_RELAY_CLIENT_INITIAL) { /* Note: Before select() we added fd to be checked for readability, if the relay fd was in some other state than its initial state. Now we need to check writability under the same condition */
+                    else if (port_select_fd_is_readable(relay->sockfd) && relay->curr_state != WISH_RELAY_CLIENT_INITIAL) { /* Note: Before select() we added fd to be checked for readability, if the relay fd was in some other state than its initial state. Now we need to check writability under the same condition */
                         uint8_t byte;   /* That's right, we read just one
                             byte at a time! */
                         int read_len = read(relay->sockfd, &byte, 1);
@@ -791,7 +692,7 @@ int main(int argc, char** argv) {
 
 #ifdef WITH_APP_TCP_SERVER
             if (as_app_server) {
-                if (FD_ISSET(app_serverfd, &rfds)) {
+                if (port_select_fd_is_readable(app_serverfd)) {
                     /* New connection to app server port */
                     //printf("Detected incoming App connection\n");
                     int newsockfd = accept(app_serverfd, NULL, NULL);
@@ -823,7 +724,7 @@ int main(int argc, char** argv) {
                         /* If the app state is something else than "app connected", then don't do anything. */
                         continue;
                     }
-                    if (FD_ISSET(app_fds[i], &rfds)) {
+                    if (port_select_fd_is_readable(app_fds[i])) {
                         /* Existing App connection has become readable */
                         size_t buffer_len = 100;
                         uint8_t buffer[buffer_len];
@@ -855,7 +756,7 @@ int main(int argc, char** argv) {
                     continue;
                 }
                 int sockfd = *((int *)ctx->send_arg);
-                if (FD_ISSET(sockfd, &rfds)) {
+                if (port_select_fd_is_readable(sockfd)) {
                     /* The Wish connection socket is now readable. Data
                      * can be read without blocking */
                     int rb_free = wish_core_get_rx_buffer_free(core, ctx);
@@ -894,7 +795,7 @@ int main(int argc, char** argv) {
                         wish_core_signal_tcp_event(core, ctx, TCP_DISCONNECTED);
                     }
                 }
-                if (FD_ISSET(sockfd, &wfds)) {
+                if (port_select_fd_is_writable(sockfd)) {
                     /* The Wish connection socket is now writable. This
                      * means that a previous connect succeeded. (because
                      * normally we don't select for socket writability!)
@@ -942,7 +843,7 @@ int main(int argc, char** argv) {
 
             /* Check for incoming Wish connections to our server */
             if (as_server) {
-                if (FD_ISSET(serverfd, &rfds)) {
+                if (port_select_fd_is_readable(serverfd)) {
                     //printf("Detected incoming connection!\n");
                     int newsockfd = accept(serverfd, NULL, NULL);
                     if (newsockfd < 0) {
@@ -1009,8 +910,6 @@ int main(int argc, char** argv) {
             periodic_timestamp = time(NULL);
             wish_time_report_periodic(core);
         }
-
-        //mist_follow_task();
     }
 
     return 0;

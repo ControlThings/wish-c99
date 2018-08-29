@@ -1111,25 +1111,18 @@ return_t wish_identity_export(wish_core_t *core, wish_identity_t *id, const char
     bson_append_binary(&bs, "uid", id->uid, WISH_UID_LEN);
     bson_append_binary(&bs, "pubkey", id->pubkey, WISH_PUBKEY_LEN);
     
-    /* Add core's current relay servers as transports of the identity */
-    wish_relay_client_t* relay;
-    int i = 0;
-    
-    if (core->relay_db != NULL) {
-        bson_append_start_array(&bs, "transports");
-
-        LL_FOREACH(core->relay_db, relay) {
+    /* Export the contact's transports, as they are in our database */
+    bson_append_start_array(&bs, "transports");
+    int bson_array_index = 0;
+    for (int i = 0; i < WISH_MAX_TRANSPORTS; i++) {
+        if (strnlen(id->transports[i], WISH_MAX_TRANSPORT_LEN) > 0) {
             char index[21];
-            BSON_NUMSTR(index, i++);
-            char host[29];
-            wish_platform_snprintf(host, 29, "wish://%d.%d.%d.%d:%d", relay->ip.addr[0], relay->ip.addr[1], relay->ip.addr[2], relay->ip.addr[3], relay->port);
-
-            bson_append_string(&bs, index, host);
+            BSON_NUMSTR(index, bson_array_index++);
+            bson_append_string(&bs, index, id->transports[i]);
         }
-
-        bson_append_finish_array(&bs);
     }
-   
+    bson_append_finish_array(&bs); //transports
+    
     // If we have some signed meta requested (used in friend requests with extra data)
     if (signed_meta) {
         bson bm;
