@@ -46,6 +46,12 @@
 #include "app_server.h"
 #endif
 
+#ifdef _WIN32
+typedef char socket_opt_t;
+#else
+typedef int socket_opt_t;
+#endif
+
 wish_core_t core_inst;
 
 wish_core_t* core = &core_inst;
@@ -294,11 +300,7 @@ void setup_wish_local_discovery(void) {
     /* Set socketoption REUSEADDR on the UDP local discovery socket so
      * that we can have several programs listening on the one and same
      * local discovery port 9090 */
-#ifdef _WIN32
-    const char option = 1;
-#else
-    int option = 1;
-#endif
+    const socket_opt_t option = 1;
     setsockopt(wld_fd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
 #endif
 
@@ -361,11 +363,8 @@ int wish_send_advertizement(wish_core_t* core, uint8_t *ad_msg, size_t ad_len) {
         perror("Could not create socket for broadcasting");
         exit(1);
     }
-#ifdef _WIN32
-    const char broadcast = 1;
-#else
-    int broadcast = 1;
-#endif
+    
+    const socket_opt_t broadcast = 1;
     if (setsockopt(s, SOL_SOCKET, SO_BROADCAST, 
             &broadcast, sizeof(broadcast))) {
         error("set sock opt");
@@ -417,11 +416,7 @@ void setup_wish_server(wish_core_t* core) {
         exit(1);
     }
     
-#ifdef _WIN32
-    const char option = 1;
-#else
-    int option = 1;
-#endif
+    const socket_opt_t option = 1;
     setsockopt(serverfd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
     socket_set_nonblocking(serverfd);
 
@@ -639,11 +634,7 @@ int main(int argc, char** argv) {
                 
                     /* Note: Before select() we added fd to be checked for writability, if the relay fd was in this state. Now we need to check writability under the same condition */
                     if (port_select_fd_is_writable(relay->sockfd) && relay->curr_state ==  WISH_RELAY_CLIENT_CONNECTING) {
-#ifdef _WIN32
-                        char connect_error = 0;
-#else
-                        int connect_error = 0;
-#endif
+                        socket_opt_t connect_error = 0;
                         socklen_t connect_error_len = sizeof(connect_error);
                         if (getsockopt(relay->sockfd, SOL_SOCKET, SO_ERROR, 
                                 &connect_error, &connect_error_len) == -1) {
@@ -800,11 +791,7 @@ int main(int argc, char** argv) {
                      * means that a previous connect succeeded. (because
                      * normally we don't select for socket writability!)
                      * */
-#ifdef _WIN32
-                    char connect_error = 0;
-#else
-                    int connect_error = 0;
-#endif
+                    socket_opt_t connect_error = 0;
                     socklen_t connect_error_len = sizeof(connect_error);
                     if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, 
                             &connect_error, &connect_error_len) == -1) {
