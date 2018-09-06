@@ -40,6 +40,34 @@ void wish_relay_client_open(wish_core_t* core, wish_relay_client_t* relay, uint8
     memcpy(relay->uid, uid, WISH_ID_LEN);
 
     /* Linux/Unix-specific from now on */ 
+    
+    wish_ip_addr_t relay_ip;
+    if (wish_parse_transport_ip(relay->host, 0, &relay_ip) == RET_FAIL) {
+        /* The relay's host was not an IP address. DNS Resolve first. */
+        
+        // FIXME this is a blocking implementation!
+        struct addrinfo addrinfo_filter = { .ai_family = AF_INET, .ai_socktype = SOCK_STREAM };
+        struct addrinfo *addrinfo_res = NULL;
+        
+        size_t port_str_max_len = 5 + 1;
+        char port_str[port_str_max_len];
+        snprintf(port_str, port_str_max_len, "%i", relay->port);
+
+        int addr_err = getaddrinfo(relay->host, port_str, &addrinfo_filter, &addrinfo_res);
+
+        if (addr_err == 0) {
+            /* Resolving was a success. Note: we should be getting only IPv4 addresses because of the filter. */
+            char* ip_str = inet_ntoa(((struct sockaddr_in*)addrinfo_res->ai_addr)->sin_addr);
+            wish_ip_addr_t ip;
+            wish_parse_transport_ip(ip_str, 0, &relay_ip);
+        }
+        else {
+            /* DNS resolving fails. */
+            relay->curr_state = WISH_RELAY_CLIENT_WAIT_RECONNECT;
+            return;
+        }
+        
+    }
 
     struct sockaddr_in relay_serv_addr;
 
@@ -58,8 +86,8 @@ void wish_relay_client_open(wish_core_t* core, wish_relay_client_t* relay, uint8
     relay_serv_addr.sin_family = AF_INET;
     char ip_str[12+3+1] = { 0 };
     sprintf(ip_str, "%i.%i.%i.%i", 
-        relay->ip.addr[0], relay->ip.addr[1], 
-        relay->ip.addr[2], relay->ip.addr[3]);
+        relay_ip.addr[0], relay_ip.addr[1], 
+        relay_ip.addr[2], relay_ip.addr[3]);
 
     //printf("Connecting to relay server: %s:%d\n", ip_str, relay_port);
     inet_aton(ip_str, &relay_serv_addr.sin_addr);

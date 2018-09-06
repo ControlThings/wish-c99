@@ -157,7 +157,7 @@ size_t buffer_len) {
         const char* url = bson_iterator_string(&it);
         int url_len = bson_iterator_string_len(&it);
         
-        if (wish_parse_transport_port(url, url_len, &tcp_port)) {
+        if (wish_parse_transport_port(url, url_len, &tcp_port) != RET_SUCCESS) {
             WISHDEBUG(LOG_CRITICAL, "wld: Error while parsing port");
             return;
         }

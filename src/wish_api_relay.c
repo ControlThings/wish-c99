@@ -28,9 +28,8 @@ void wish_api_relay_list(rpc_server_req* req, const uint8_t* args) {
         char index[21];
         BSON_NUMSTR(index, i);
         
-        char host[22];
-        
-        wish_platform_snprintf(host, 22, "%d.%d.%d.%d:%d", relay->ip.addr[0], relay->ip.addr[1], relay->ip.addr[2], relay->ip.addr[3], relay->port);
+        char host[RELAY_SERVER_HOST_MAX_LEN];
+        wish_platform_snprintf(host, RELAY_SERVER_HOST_MAX_LEN, "%s:%d", relay->host, relay->port);
         
         bson_append_start_object(&bs, index);
         bson_append_string(&bs, "host", host);
@@ -106,7 +105,8 @@ void wish_api_relay_remove(rpc_server_req* req, const uint8_t* args) {
     int addr_len = bson_iterator_string_len(&it); 
 
     wish_relay_client_t ctx;
-    wish_parse_transport_ip_port(addr, addr_len, &ctx.ip, &ctx.port);
+    wish_parse_transport_host_port(addr, addr_len, ctx.host, &ctx.port);
+    
     
     wish_relay_client_t* relay;
     wish_relay_client_t* tmp;
@@ -114,7 +114,7 @@ void wish_api_relay_remove(rpc_server_req* req, const uint8_t* args) {
     bool found = false;
     
     LL_FOREACH_SAFE(core->relay_db, relay, tmp) {
-        if ( memcmp(&relay->ip.addr, &ctx.ip.addr, 4) != 0 || relay->port != ctx.port ) { continue; }
+        if ( strncmp(relay->host, ctx.host, RELAY_SERVER_HOST_MAX_LEN) != 0 || relay->port != ctx.port ) { continue; }
 
         found = true;
         

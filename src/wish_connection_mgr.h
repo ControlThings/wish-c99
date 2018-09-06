@@ -21,6 +21,8 @@ void wish_connections_init(wish_core_t* core);
 /* Initiate a wish connection to specified ip and port, and associate
  * the wish_context ctx to the connection */
 int wish_open_connection(wish_core_t* core, wish_connection_t* connection, wish_ip_addr_t *ip, uint16_t port, bool via_relay);
+
+int wish_open_connection_dns(wish_core_t* core, wish_connection_t* connection, char* host, uint16_t port, bool via_relay);
     
 int wish_send_advertizement(wish_core_t* core, uint8_t *ad, size_t ad_len);
 
@@ -50,7 +52,6 @@ int wish_get_host_ip_str(wish_core_t* core, char* addr_str, size_t addr_str_len)
 int wish_get_host_port(wish_core_t* core);
 void wish_set_host_port(wish_core_t* core, uint16_t port);
 
-
-return_t wish_connections_connect_tcp(wish_core_t* core, uint8_t *luid, uint8_t *ruid, wish_ip_addr_t *ip, uint16_t port);
+return_t wish_connections_connect_transport(wish_core_t* core, uint8_t *luid, uint8_t *ruid, char* transport);
 
 void wish_close_parallel_connections(wish_core_t* core, void *connection);

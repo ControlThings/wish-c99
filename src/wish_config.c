@@ -117,8 +117,8 @@ int wish_core_config_save(wish_core_t* core) {
         
         LL_FOREACH(core->relay_db, relay) {
             
-            char host[22];
-            wish_platform_snprintf(host, 22, "%d.%d.%d.%d:%d", relay->ip.addr[0], relay->ip.addr[1], relay->ip.addr[2], relay->ip.addr[3], relay->port);
+            char host[RELAY_SERVER_HOST_MAX_LEN];
+            wish_platform_snprintf(host, RELAY_SERVER_HOST_MAX_LEN, "%s:%d", relay->host, relay->port);
             
             BSON_NUMSTR(index, i++);
             bson_append_string(&bs, index, host);

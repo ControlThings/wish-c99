@@ -627,7 +627,8 @@ void wish_create_local_identity(wish_core_t *core, wish_identity_t *id, const ch
     else {
         int i = 0;
         LL_FOREACH(core->relay_db, relay) {
-            wish_relay_encode_as_url(&(id->transports[i][0]), &relay->ip, relay->port);
+            //wish_relay_encode_as_url(&(id->transports[i][0]), &relay->ip, relay->port);
+            wish_relay_encode_as_url(&(id->transports[i][0]), relay->host, relay->port);
             i++;
             if (i >= WISH_MAX_TRANSPORTS) {
                 break;

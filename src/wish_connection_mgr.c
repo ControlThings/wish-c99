@@ -58,23 +58,8 @@ void wish_connections_check(wish_core_t* core) {
             if (url_len > 0) {
                 char* url = id.transports[cnt];
                 //WISHDEBUG(LOG_CRITICAL, "  Should connect %02x %02x > %02x %02x to %s", uid_list[0].uid[0], uid_list[0].uid[1], uid_list[j].uid[0], uid_list[j].uid[1], url);
-            
-                wish_ip_addr_t ip;
-                uint16_t port;
-                int ret = wish_parse_transport_port(url, url_len, &port);
-                if (ret) {
-                    WISHDEBUG(LOG_CRITICAL, "Could not parse transport port");
-                }
-                else {
-                    ret = wish_parse_transport_ip(url, url_len, &ip);
-                    if (ret) {
-                        WISHDEBUG(LOG_CRITICAL, "Could not parse transport ip");
-                    }
-                    else {
-                        /* Parsing of IP and port OK: go ahead with connecting */
-                        wish_connections_connect_tcp(core, uid_list[0].uid, uid_list[j].uid, &ip, port);
-                    }
-                }
+
+                wish_connections_connect_transport(core, uid_list[0].uid, uid_list[j].uid, url);
             }
         }
         wish_identity_destroy(&id);
@@ -143,7 +128,7 @@ void check_connection_liveliness(wish_core_t* core, void* ctx) {
     }
 }
 
-return_t wish_connections_connect_tcp(wish_core_t* core, uint8_t *luid, uint8_t *ruid, wish_ip_addr_t *ip, uint16_t port) {
+return_t wish_connections_connect_transport(wish_core_t* core, uint8_t *luid, uint8_t *ruid, char* transport) {
     
     wish_identity_t lu;
     wish_identity_t ru;
@@ -163,7 +148,28 @@ return_t wish_connections_connect_tcp(wish_core_t* core, uint8_t *luid, uint8_t 
     
     if (connection != NULL) {
         //WISHDEBUG(LOG_CRITICAL, "Connection attempt: %s > %s (%u.%u.%u.%u:%hu)", lu.alias, ru.alias, ip->addr[0], ip->addr[1], ip->addr[2], ip->addr[3], port);
-        wish_open_connection(core, connection, ip, port, false);
+        
+        wish_ip_addr_t ip;
+        uint16_t port;
+        size_t transport_len = strnlen(transport, WISH_MAX_TRANSPORT_LEN);
+        
+        return_t parse_ret = wish_parse_transport_ip_port(transport, transport_len, &ip, &port);
+        if (parse_ret == RET_SUCCESS) {
+            /* Connect using the ip address, as the tranport clearly is an ip. */
+            wish_open_connection(core, connection, &ip, port, false);
+        }
+        else {
+            char host[WISH_MAX_TRANSPORT_LEN] = { 0 };
+            parse_ret = wish_parse_transport_host_port(transport, transport_len, host, &port);
+            if (parse_ret == RET_SUCCESS) {
+                wish_open_connection_dns(core, connection, host, port, false);
+            }
+            else {
+                WISHDEBUG(LOG_CRITICAL, "Cannot connect, the transport parsing fails for IP and hostname.");
+                wish_close_connection(core, connection);
+                return RET_FAIL;
+            }
+        }
     }
     
     return RET_SUCCESS;

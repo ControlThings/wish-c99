@@ -95,6 +95,44 @@ void connect_fail_cb(wish_connection_t* connection) {
     wish_core_signal_tcp_event(connection->core, connection, TCP_DISCONNECTED);
 }
 
+/**
+ * Implementation of the port layer wish connection function.
+ * 
+ * FIXME Note that this implementation could block because of the DNS resolution.
+ * 
+ * @param core
+ * @param connection
+ * @param host
+ * @param port
+ * @param via_relay
+ * @return 
+ */
+int wish_open_connection_dns(wish_core_t* core, wish_connection_t* connection, char* host, uint16_t port, bool via_relay) {
+    /* This is a filter. Specify that we are interested only in IPv4 addresses. */
+    struct addrinfo addrinfo_filter = { .ai_family = AF_INET, .ai_socktype = SOCK_STREAM };
+    struct addrinfo *addrinfo_res = NULL;
+    
+    size_t port_str_max_len = 5 + 1;
+    char port_str[port_str_max_len];
+    snprintf(port_str, port_str_max_len, "%i", port);
+    
+    int addr_err = getaddrinfo(host, port_str, &addrinfo_filter, &addrinfo_res);
+    
+    if (addr_err == 0) {
+        /* Resolving was a success. Note: we should be getting only IPv4 addresses because of the filter. */
+        char* ip_str = inet_ntoa(((struct sockaddr_in*)addrinfo_res->ai_addr)->sin_addr);
+        wish_ip_addr_t ip;
+        wish_parse_transport_ip(ip_str, 0, &ip);
+        wish_open_connection(core, connection, &ip, port, via_relay);
+    }
+    else {
+        printf("DNS resolve fail\n");
+        wish_close_connection(core, connection);
+    }
+    
+    return 0;
+}
+
 int wish_open_connection(wish_core_t* core, wish_connection_t* connection, wish_ip_addr_t *ip, uint16_t port, bool relaying) {
     connection->core = core;
     
@@ -168,11 +206,11 @@ char usage_str[] = "Wish Core " WISH_CORE_VERSION_STRING
     -b don't broadcast own uid over local discovery\n\
     -l don't listen to local discovery broadcasts\n\
 \n\
-    -s start accepting incoming connections (\"server\" mode)\n\
+    -s Don't listen for incoming connections (will only open connections, but not accept incoming ones)\n\
     -p <port> listen for incoming connections at this TCP port\n\
     -r connect to a relay server, for accepting incoming connections via the relay.\n\
 \n\
-    -a <port> start \"App TCP\" interface server at port";
+    -a <port> start \"App TCP\" interface server at port\n";
 
 static void print_usage(char *executable_name) {
     printf(usage_str, executable_name);
@@ -227,8 +265,8 @@ static void process_cmdline_opts(int argc, char** argv) {
             listen_to_adverts = false;
             break;
         case 's':
-            //printf("Would start as server\n");
-            as_server = true;
+            printf("Won't act as Wish server\n");
+            as_server = false;
             break;
         case 'p':
             port = atoi(optarg);
