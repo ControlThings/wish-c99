@@ -105,7 +105,10 @@ void wish_api_relay_remove(rpc_server_req* req, const uint8_t* args) {
     int addr_len = bson_iterator_string_len(&it); 
 
     wish_relay_client_t ctx;
-    wish_parse_transport_host_port(addr, addr_len, ctx.host, &ctx.port);
+    if (wish_parse_transport_host_port(addr, addr_len, ctx.host, &ctx.port) != RET_SUCCESS) {
+        rpc_server_error_msg(req, 307, "Could not remove relay. Could not parse host:port from the transport.");
+        return;
+    }
     
     
     wish_relay_client_t* relay;

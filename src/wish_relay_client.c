@@ -97,7 +97,11 @@ void wish_relay_client_add(wish_core_t* core, const char* host) {
     memset(relay, 0, size);
 
     size_t host_len = strnlen(host, RELAY_SERVER_HOST_MAX_LEN);
-    wish_parse_transport_host_port(host, host_len, relay->host, &relay->port);
+    if (wish_parse_transport_host_port(host, host_len, relay->host, &relay->port) != RET_SUCCESS) {
+        WISHDEBUG(LOG_CRITICAL, "wish_realy_client_add: Cannot parse transport host port");
+        wish_platform_free(relay);
+        return;
+    }
 
 
     wish_relay_client_t* elt;

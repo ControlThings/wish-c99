@@ -1177,6 +1177,7 @@ void wish_api_identity_friend_request(rpc_server_req* req, const uint8_t* args) 
         /* The transport could not be parsed as IP, try to transport as hostname/port and connect with a DNS resolving step. */
         char host[WISH_MAX_TRANSPORT_LEN] = { 0 };
         if (wish_parse_transport_host_port(transport, WISH_MAX_TRANSPORT_LEN, host, &port) == RET_SUCCESS) {
+            WISHDEBUG(LOG_CRITICAL, "Will start a friend req connection to: %s:%d\n", host, port);
             wish_open_connection_dns(core, connection, host, port, false);
         }
         else {

@@ -5,8 +5,27 @@
 #include "wish_ip_addr.h"
 #include "wish_return.h"
 
+/**
+ * Parse out an IP address, and port from a wish transport url of the form wish://10.1.1.231:4444 or just 1.1.1.1:1
+ * 
+ * @param url
+ * @param url_len
+ * @param ip
+ * @param port
+ * @return RET_SUCESS if both IP and port were parsed
+ */
 return_t wish_parse_transport_ip_port(const char *url, size_t url_len, wish_ip_addr_t *ip, uint16_t *port);
 
+/**
+ * 
+ * Parse out hostname and port from a wish transport url of the form: wish://wish.cto.fi:40000
+ * 
+ * @param url
+ * @param url_len
+ * @param host
+ * @param port
+ * @return RET_SUCESS if both hostname and port were parsed
+ */
 return_t wish_parse_transport_host_port(const char *url, size_t url_len, char *host, uint16_t *port);
 
 /**
