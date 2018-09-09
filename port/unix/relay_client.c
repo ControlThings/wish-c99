@@ -35,15 +35,15 @@ void wish_relay_client_open(wish_core_t* core, wish_relay_client_t* relay, uint8
     /* FIXME this has to be split into port-specific and generic
      * components. For example, setting up the RB, next state, expect
      * byte, copying of id is generic to all ports */
-    relay->curr_state = WISH_RELAY_CLIENT_CONNECTING;
+    
     ring_buffer_init(&(relay->rx_ringbuf), relay->rx_ringbuf_storage, RELAY_CLIENT_RX_RB_LEN);
     memcpy(relay->uid, uid, WISH_ID_LEN);
 
     /* Linux/Unix-specific from now on */ 
-    
     wish_ip_addr_t relay_ip;
     if (wish_parse_transport_ip(relay->host, 0, &relay_ip) == RET_FAIL) {
         /* The relay's host was not an IP address. DNS Resolve first. */
+        relay->curr_state = WISH_RELAY_CLIENT_RESOLVING;
         
         // FIXME this is a blocking implementation!
         struct addrinfo addrinfo_filter = { .ai_family = AF_INET, .ai_socktype = SOCK_STREAM };
@@ -60,6 +60,7 @@ void wish_relay_client_open(wish_core_t* core, wish_relay_client_t* relay, uint8
             char* ip_str = inet_ntoa(((struct sockaddr_in*)addrinfo_res->ai_addr)->sin_addr);
             wish_ip_addr_t ip;
             wish_parse_transport_ip(ip_str, 0, &relay_ip);
+            freeaddrinfo(addrinfo_res);
         }
         else {
             /* DNS resolving fails. */
@@ -68,6 +69,7 @@ void wish_relay_client_open(wish_core_t* core, wish_relay_client_t* relay, uint8
         }
         
     }
+    relay->curr_state = WISH_RELAY_CLIENT_CONNECTING;
 
     struct sockaddr_in relay_serv_addr;
 

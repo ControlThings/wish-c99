@@ -108,6 +108,8 @@ void connect_fail_cb(wish_connection_t* connection) {
  * @return 
  */
 int wish_open_connection_dns(wish_core_t* core, wish_connection_t* connection, char* host, uint16_t port, bool via_relay) {
+    connection->curr_transport_state = TRANSPORT_STATE_RESOLVING;
+    
     /* This is a filter. Specify that we are interested only in IPv4 addresses. */
     struct addrinfo addrinfo_filter = { .ai_family = AF_INET, .ai_socktype = SOCK_STREAM };
     struct addrinfo *addrinfo_res = NULL;
@@ -124,6 +126,7 @@ int wish_open_connection_dns(wish_core_t* core, wish_connection_t* connection, c
         wish_ip_addr_t ip;
         wish_parse_transport_ip(ip_str, 0, &ip);
         wish_open_connection(core, connection, &ip, port, via_relay);
+        freeaddrinfo(addrinfo_res);
     }
     else {
         printf("DNS resolve fail\n");
@@ -206,7 +209,8 @@ char usage_str[] = "Wish Core " WISH_CORE_VERSION_STRING
     -b don't broadcast own uid over local discovery\n\
     -l don't listen to local discovery broadcasts\n\
 \n\
-    -s Don't listen for incoming connections (will only open connections, but not accept incoming ones)\n\
+    -S will only open connections, but not accept incoming ones (Don't listen to wish connections)\n\
+    -s listen for incoming Wish connections\n\
     -p <port> listen for incoming connections at this TCP port\n\
     -r connect to a relay server, for accepting incoming connections via the relay.\n\
 \n\
@@ -264,9 +268,12 @@ static void process_cmdline_opts(int argc, char** argv) {
             printf("Will not listen to wld broadcasts!\n");
             listen_to_adverts = false;
             break;
-        case 's':
+        case 'S':
             printf("Won't act as Wish server\n");
             as_server = false;
+            break;
+        case 's':
+            as_server = true;
             break;
         case 'p':
             port = atoi(optarg);

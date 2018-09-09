@@ -34,6 +34,7 @@ enum transport_state {
      * incoming relay connection */
     TRANSPORT_STATE_RELAY_CLIENT_SEND_SESSION_ID,
     TRANSPORT_STATE_CONNECTING, /* Used by Linux port */
+    TRANSPORT_STATE_RESOLVING, /* DNS resolving on-going, before proceeding to connecting state */
 };
 
 enum protocol_state {
