@@ -11,3 +11,6 @@
 [submodule "deps/uthash"]
 	path = deps/uthash
 	url = https://github.com/troydhanson/uthash.git
+[submodule "deps/dns"]
+	path = deps/dns
+	url = https://github.com/wahern/dns
