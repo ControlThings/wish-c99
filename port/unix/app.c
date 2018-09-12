@@ -130,7 +130,8 @@ int wish_open_connection_dns(wish_core_t* core, wish_connection_t* connection, c
     }
     else {
         printf("DNS resolve fail\n");
-        wish_close_connection(core, connection);
+        /* Note: Don't call wish_close_connection() here, as it will do (platform-dependent) things set up by wish_open_connection(), which has not been called in this case. */
+        wish_core_signal_tcp_event(core, connection, TCP_DISCONNECTED);
     }
     
     return 0;
@@ -209,7 +210,7 @@ char usage_str[] = "Wish Core " WISH_CORE_VERSION_STRING
     -b don't broadcast own uid over local discovery\n\
     -l don't listen to local discovery broadcasts\n\
 \n\
-    -S will only open connections, but not accept incoming ones (Don't listen to wish connections)\n\
+    -S will only open connections, but not accept incoming ones (Don't listen to wish connection port)\n\
     -s listen for incoming Wish connections\n\
     -p <port> listen for incoming connections at this TCP port\n\
     -r connect to a relay server, for accepting incoming connections via the relay.\n\
@@ -254,7 +255,7 @@ extern enum app_state app_states[];
  * variables accordingly */
 static void process_cmdline_opts(int argc, char** argv) {
     int opt = 0;
-    while ((opt = getopt(argc, argv, "hbilc:C:R:sp:ra:")) != -1) {
+    while ((opt = getopt(argc, argv, "hbilc:C:R:sSp:ra:")) != -1) {
         switch (opt) {
         case 'b':
             printf("Will not do wld broadcast!\n");
