@@ -32,6 +32,25 @@ cmake ..
 make
 ```
 
+## Usage
+```
+    -b don't broadcast own uid over local discovery
+    -l don't listen to local discovery broadcasts
+    -i Starts the core claimable, which means the first remote wish identity who accesses this core can claim the admin role
+
+    -s start accepting incoming connections ("server" mode)
+    -p <port> listen for incoming connections at this TCP port
+    -r connect to a relay server, for accepting incoming connections via the relay.
+
+    -a <port> start "App TCP" interface server at port
+
+    Direct client connection:
+    -c <ip_addr> open a direct client connection to this IP addr
+    -C <port> use specified TCP destination port when connecting as direct client
+    -R <alias> The remote party's alias name (in local contact DB)
+```
+
+
 ## Acknowledgements
 
 Part of this work has been carried out in the scope of the project Industrial Internet Standardized Interoperability (II-SI), co-funded by Tekes (Finnish Funding Agency for Innovation) contract number 5409/31/2014.
