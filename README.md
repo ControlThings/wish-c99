@@ -56,7 +56,7 @@ The wish core takes the following arguments
 https://github.com/ControlThings/mist-examples-nodejs 
 
 ## Getting started
-#. Once you've launched the wish daemon for the first time, you'll need to create an identity. This can for instance be made using the wish-cli command line tool. 
+1. Once you've launched the wish daemon for the first time, you'll need to create an identity. This can be made using the wish-cli command line tool. 
 ```sh
 wish-cli
 identity.create('My Identity')
