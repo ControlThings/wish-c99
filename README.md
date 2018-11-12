@@ -4,13 +4,13 @@ Wish – A peer-to-peer identity based application development stack. Built to e
 
 While Wish is inspired by social networking it is also applicable in areas not commonly associated with social media, such as providing an identity layer for physical devices, providing trust management tools for companies, or publishing scientific research. Wish provides a generic social network stack for building any application utilizing these features.
 
-Wish key features and APIs (not necessarily implemented)
+Wish key features and APIs
 
 * Create/manage identities
 * Manage trust-relationships between identities
 * Sign/verify signatures by identities
 * Create peers (register protocol handler)
-* Discover avaliable peers
+* Discover available peers
 * Send and receive data to/from other peers
 * Manage and provide access control
 * Manage connectivity
@@ -55,6 +55,13 @@ The wish core takes the following arguments
 `mist examples`: 
 https://github.com/ControlThings/mist-examples-nodejs 
 
+## Getting started
+#. Once you've launched the wish daemon for the first time, you'll need to create an identity. This can for instance be made using the wish-cli command line tool. 
+```sh
+wish-cli
+identity.create('My Identity')
+```
+#. Run an app or service which uses the daemon, for instance one of the `mist-examples` from the previous section
 
 ## Acknowledgements
 
