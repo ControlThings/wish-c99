@@ -27,7 +27,7 @@ make
 ```
 ## Install
 This binary can be executed wherever, make sure the executable permissions are set ``chmod u+x``. 
-*It will also require write access to the same folder, where it will store config files.*
+**It will also require write access to the same folder, it will store config files and a keystore.**
 
 ## Usage
 ```
@@ -36,6 +36,7 @@ The wish core takes the following arguments
     -l don't listen to local discovery broadcasts
     -i Starts the core in claimable mode, which means the first remote wish identity who 
        accesses this core can claim the admin role
+    -h for displaying help
 
     -s start accepting incoming connections ("server" mode)
     -p <port> listen for incoming connections at this TCP port
