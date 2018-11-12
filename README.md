@@ -17,12 +17,6 @@ Wish key features and APIs (not necessarily implemented)
 
 This is a C-language implementation based on the Wish (wish-core) reference implementation by André Kaustell.
 
-## Applications
-
-`wish-cli`: A node.js command line interface for accessing and managing a Wish Core. See: https://www.npmjs.com/package/wish-cli
-
-`wish-core-api`: A native node.js addon to quickly build node.js applications using Wish. See https://www.npmjs.com/package/wish-core-api.
-
 ## Build
 
 ```sh
@@ -34,6 +28,7 @@ make
 
 ## Usage
 ```
+The wish core takes the following arguments
     -b don't broadcast own uid over local discovery
     -l don't listen to local discovery broadcasts
     -i Starts the core in claimable mode, which means the first remote wish identity who 
@@ -50,6 +45,15 @@ make
     -C <port> use specified TCP destination port when connecting as direct client
     -R <alias> The remote party's alias name (in local contact DB)
 ```
+
+## Applications
+
+`wish-cli`: A node.js command line interface for accessing and managing a Wish Core. See: https://www.npmjs.com/package/wish-cli
+
+`wish-core-api`: A native node.js addon to quickly build node.js applications using Wish. See https://www.npmjs.com/package/wish-core-api.
+
+`mist examples`: 
+https://github.com/ControlThings/mist-examples-nodejs 
 
 
 ## Acknowledgements
