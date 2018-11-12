@@ -61,7 +61,7 @@ https://github.com/ControlThings/mist-examples-nodejs
 wish-cli
 identity.create('My Identity')
 ```
-#. Run an app or service which uses the daemon, for instance one of the `mist-examples` from the previous section
+2. Run an app or service which uses the daemon, for instance one of the `mist-examples` from the previous section
 
 ## Acknowledgements
 
