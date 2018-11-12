@@ -25,6 +25,9 @@ cd build
 cmake ..
 make
 ```
+## Install
+This binary can be executed wherever, make sure the executable permissions are set ``chmod u+x``. 
+*It will also require write access to the same folder, where it will store config files.*
 
 ## Usage
 ```
