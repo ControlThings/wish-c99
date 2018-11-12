@@ -36,7 +36,8 @@ make
 ```
     -b don't broadcast own uid over local discovery
     -l don't listen to local discovery broadcasts
-    -i Starts the core claimable, which means the first remote wish identity who accesses this core can claim the admin role
+    -i Starts the core in claimable mode, which means the first remote wish identity who 
+       accesses this core can claim the admin role
 
     -s start accepting incoming connections ("server" mode)
     -p <port> listen for incoming connections at this TCP port
