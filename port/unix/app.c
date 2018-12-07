@@ -280,6 +280,9 @@ void setup_wish_local_discovery(void) {
      * local discovery port 9090 */
     int option = 1;
     setsockopt(wld_fd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
+#ifdef __APPLE__
+    setsockopt(wld_fd, SOL_SOCKET, SO_REUSEPORT, &option, sizeof(option));
+#endif
 #endif
 
     socket_set_nonblocking(wld_fd);
