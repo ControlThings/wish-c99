@@ -39,10 +39,10 @@ The wish core takes the following arguments
     -h for displaying help
 
     -s start accepting incoming connections ("server" mode)
-    -p <port> listen for incoming connections at this TCP port
+    -p <port> listen for incoming connections at this TCP port (default: 37009), where remote wish cores can connect to
     -r connect to a relay server, for accepting incoming connections via the relay.
 
-    -a <port> start "App TCP" interface server at port
+    -a <port> start "App TCP" interface server at port (default: 9094), where the wish based apps are connecting to
 
     Direct client connection:
     -c <ip_addr> open a direct client connection to this IP addr
