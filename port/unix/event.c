@@ -19,7 +19,7 @@ void wish_message_processor_notify(struct wish_event *ev) {
     num_curr_events++;
     if (num_curr_events > EVENT_QUEUE_LEN) {
         wish_platform_printf("Event queue overflow.\n");
-        //exit(0);
+        abort();
     }
 }
 
