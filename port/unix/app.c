@@ -45,7 +45,7 @@ wish_core_t* core = &core_inst;
 void error(const char *msg)
 {
     perror(msg);
-    exit(0);
+    abort();
 }
 
 int write_to_socket(wish_connection_t* connection, unsigned char* buffer, int len) {
@@ -72,7 +72,7 @@ void socket_set_nonblocking(int sockfd) {
 
     if (status == -1){
         perror("When setting socket to non-blocking mode");
-        exit(1);
+        abort();
     }
 }
 
@@ -143,7 +143,7 @@ int wish_open_connection(wish_core_t* core, wish_connection_t* connection, wish_
     int *sockfd_ptr = malloc(sizeof(int));
     if (sockfd_ptr == NULL) {
         printf("Malloc fail");
-        exit(1);
+        abort();
     }
     *(sockfd_ptr) = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -154,7 +154,7 @@ int wish_open_connection(wish_core_t* core, wish_connection_t* connection, wish_
 
     if (sockfd < 0) {
         perror("socket() returns error:");
-        exit(1);
+        abort();
     }
 
     // set ip and port to wish connection
@@ -293,7 +293,7 @@ static void process_cmdline_opts(int argc, char** argv) {
             as_app_server = true;
 #else // WITH_APP_TCP_SERVER
             printf("App tcp server not included in build!\n");
-            exit(1);
+            abort();
 #endif
             break;
         default:
@@ -385,7 +385,7 @@ int wish_send_advertizement(wish_core_t* core, uint8_t *ad_msg, size_t ad_len) {
     int s = socket(AF_INET, SOCK_DGRAM, 0);
     if (s < 0) {
         perror("Could not create socket for broadcasting");
-        exit(1);
+        abort();
     }
 
     int broadcast = 1;
@@ -437,7 +437,7 @@ void setup_wish_server(wish_core_t* core) {
     serverfd = socket(AF_INET, SOCK_STREAM, 0);
     if (serverfd < 0) {
         perror("server socket creation");
-        exit(1);
+        abort();
     }
     int option = 1;
     setsockopt(serverfd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
@@ -452,7 +452,7 @@ void setup_wish_server(wish_core_t* core) {
             sizeof(server_addr)) < 0) {
         perror("ERROR on binding wish server socket");
         printf("setup_wish_server: Trying to bind port %d failed.\n", server_addr.sin_port);
-        exit(1);
+        abort();
     }
     int connection_backlog = 1;
     if (listen(serverfd, connection_backlog) < 0) {
@@ -473,7 +473,7 @@ static int seed_random_init() {
         size_t read = fread(&randval, sizeof(randval), 1, f);
         if (read != 1) {
             printf("Failed to read from /dev/urandom, this is dangerous, bailing out.\n");
-            exit(1);
+            abort();
         }
         srandom(randval);
     }
@@ -624,7 +624,7 @@ int main(int argc, char** argv) {
                         if (getsockopt(relay->sockfd, SOL_SOCKET, SO_ERROR, 
                                 &connect_error, &connect_error_len) == -1) {
                             perror("Unexepected getsockopt error");
-                            exit(1);
+                            abort();
                         }
                         if (connect_error == 0) {
                             /* connect() succeeded, the connection is open */
@@ -674,7 +674,7 @@ int main(int argc, char** argv) {
                     int newsockfd = accept(app_serverfd, NULL, NULL);
                     if (newsockfd < 0) {
                         perror("on accept");
-                        exit(1);
+                        abort();
                     }
                     socket_set_nonblocking(newsockfd);
                     int i = 0;
@@ -744,7 +744,7 @@ int main(int argc, char** argv) {
                     }
                     if (rb_free < 0) {
                         printf("Error getting ring buffer free sz\n");
-                        exit(1);
+                        abort();
                     }
                     const size_t read_buf_len = rb_free;
                     uint8_t buffer[read_buf_len];
@@ -769,6 +769,7 @@ int main(int argc, char** argv) {
                         close(sockfd);
                         free(ctx->send_arg);
                         wish_core_signal_tcp_event(core, ctx, TCP_DISCONNECTED);
+                        continue;
                     }
                 }
                 if (port_select_fd_is_writable(sockfd)) {
@@ -781,7 +782,7 @@ int main(int argc, char** argv) {
                     if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, 
                             &connect_error, &connect_error_len) == -1) {
                         perror("Unexepected getsockopt error");
-                        exit(1);
+                        abort();
                     }
                     if (connect_error == 0) {
                         /* connect() succeeded, the connection is open
@@ -797,7 +798,7 @@ int main(int argc, char** argv) {
                         }
                         else {
                             printf("There is somekind of state inconsistency\n");
-                            exit(1);
+                            abort();
                         }
                     }
                     else {
@@ -820,7 +821,7 @@ int main(int argc, char** argv) {
                     int newsockfd = accept(serverfd, NULL, NULL);
                     if (newsockfd < 0) {
                         perror("on accept");
-                        exit(1);
+                        abort();
                     }
                     socket_set_nonblocking(newsockfd);
                     /* Start the wish core with null IDs. 
@@ -853,7 +854,7 @@ int main(int argc, char** argv) {
         else {
             /* Select error return */
             perror("Select error: ");
-            exit(0);
+            abort();
         }
         
         static time_t timestamp = 0;
