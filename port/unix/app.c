@@ -723,6 +723,7 @@ int main(int argc, char** argv) {
                         close(sockfd);
                         free(ctx->send_arg);
                         wish_core_signal_tcp_event(core, ctx, TCP_DISCONNECTED);
+                        continue;
                     }
                 }
                 if (port_select_fd_is_writable(sockfd)) {
