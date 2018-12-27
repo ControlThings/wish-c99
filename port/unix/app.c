@@ -33,6 +33,7 @@
 
 #include "wish_port_config.h"
 #include "port_select.h"
+#include "port_dns.h"
 
 #ifdef WITH_APP_TCP_SERVER
 #include "app_server.h"
@@ -107,6 +108,7 @@ void connect_fail_cb(wish_connection_t* connection) {
  * @param via_relay
  * @return 
  */
+#if 0
 int wish_open_connection_dns(wish_core_t* core, wish_connection_t* connection, char* host, uint16_t port, bool via_relay) {
     connection->curr_transport_state = TRANSPORT_STATE_RESOLVING;
     
@@ -133,6 +135,16 @@ int wish_open_connection_dns(wish_core_t* core, wish_connection_t* connection, c
         /* Note: Don't call wish_close_connection() here, as it will do (platform-dependent) things set up by wish_open_connection(), which has not been called in this case. */
         wish_core_signal_tcp_event(core, connection, TCP_DISCONNECTED);
     }
+    
+    return 0;
+}
+#endif
+int wish_open_connection_dns(wish_core_t* core, wish_connection_t* connection, char* host, uint16_t port, bool via_relay) {
+    connection->curr_transport_state = TRANSPORT_STATE_RESOLVING;
+    connection->core = core;
+    connection->remote_port = port;
+    connection->via_relay = via_relay;
+    port_dns_start_resolving_wish_conn(connection, host);
     
     return 0;
 }
@@ -565,6 +577,9 @@ int main(int argc, char** argv) {
                 else if (relay->curr_state == WISH_RELAY_CLIENT_WAIT_RECONNECT) {
                     /* connect to relay server has failed or disconnected and we wait some time before retrying */
                 }
+                else if (relay->curr_state == WISH_RELAY_CLIENT_RESOLVING) {
+                    /* Don't do anything as the resolver is resolving. relay->sockfd is not valid as it has not yet been initted! */
+                }
                 else if (relay->curr_state != WISH_RELAY_CLIENT_INITIAL) {
                     if (relay->sockfd != -1) {
                         port_select_fd_set_readable(relay->sockfd);
@@ -598,6 +613,10 @@ int main(int argc, char** argv) {
                  * the socket in the set of writable FDs so that we can
                  * detect when connect() is ready */
                 port_select_fd_set_writable(sockfd);
+            }
+            else if (ctx->curr_transport_state == TRANSPORT_STATE_RESOLVING) {
+                /* The transport host addr is being resolved, sockfd is not valid and indeed should not be added to any of the sets! */
+                continue;
             }
             else {
                 port_select_fd_set_readable(sockfd);
@@ -883,6 +902,8 @@ int main(int argc, char** argv) {
             periodic_timestamp = time(NULL);
             wish_time_report_periodic(core);
         }
+        
+        port_dns_poll_resolvers();
     }
 
     return 0;

@@ -13,10 +13,13 @@
 #include <arpa/inet.h>
 #include <errno.h>
 
-
 #include "wish_relay_client.h"
 #include "wish_connection.h"
 #include "wish_debug.h"
+#include "port_dns.h"
+#include "port_relay_client.h"
+
+//#define RELAY_CLIENT_BLOCKING_DNS
 
 void socket_set_nonblocking(int sockfd);
 
@@ -45,6 +48,7 @@ void wish_relay_client_open(wish_core_t* core, wish_relay_client_t* relay, uint8
         /* The relay's host was not an IP address. DNS Resolve first. */
         relay->curr_state = WISH_RELAY_CLIENT_RESOLVING;
         
+#ifdef RELAY_CLIENT_BLOCKING_DNS
         // FIXME this is a blocking implementation!
         struct addrinfo addrinfo_filter = { .ai_family = AF_INET, .ai_socktype = SOCK_STREAM };
         struct addrinfo *addrinfo_res = NULL;
@@ -58,17 +62,33 @@ void wish_relay_client_open(wish_core_t* core, wish_relay_client_t* relay, uint8
         if (addr_err == 0) {
             /* Resolving was a success. Note: we should be getting only IPv4 addresses because of the filter. */
             char* ip_str = inet_ntoa(((struct sockaddr_in*)addrinfo_res->ai_addr)->sin_addr);
-            wish_ip_addr_t ip;
             wish_parse_transport_ip(ip_str, 0, &relay_ip);
             freeaddrinfo(addrinfo_res);
+            port_relay_client_open(core, relay, &relay_ip);
         }
         else {
             /* DNS resolving fails. */
             relay->curr_state = WISH_RELAY_CLIENT_WAIT_RECONNECT;
             return;
         }
+#else
+        port_dns_start_resolving_relay_client(relay, relay->host);
+#endif
         
     }
+    else {
+        
+        port_relay_client_open(relay, &relay_ip);
+    }
+    
+}
+
+void wish_relay_client_close(wish_core_t* core, wish_relay_client_t *relay) {
+    close(relay->sockfd);
+    relay_ctrl_disconnect_cb(core, relay);
+}
+
+void port_relay_client_open(wish_relay_client_t* relay, wish_ip_addr_t *relay_ip) {
     relay->curr_state = WISH_RELAY_CLIENT_CONNECTING;
 
     struct sockaddr_in relay_serv_addr;
@@ -88,8 +108,8 @@ void wish_relay_client_open(wish_core_t* core, wish_relay_client_t* relay, uint8
     relay_serv_addr.sin_family = AF_INET;
     char ip_str[12+3+1] = { 0 };
     sprintf(ip_str, "%i.%i.%i.%i", 
-        relay_ip.addr[0], relay_ip.addr[1], 
-        relay_ip.addr[2], relay_ip.addr[3]);
+        relay_ip->addr[0], relay_ip->addr[1], 
+        relay_ip->addr[2], relay_ip->addr[3]);
 
     //printf("Connecting to relay server: %s:%d\n", ip_str, relay_port);
     inet_aton(ip_str, &relay_serv_addr.sin_addr);
@@ -108,12 +128,3 @@ void wish_relay_client_open(wish_core_t* core, wish_relay_client_t* relay, uint8
         WISHDEBUG(LOG_CRITICAL, "Relay client connection succeeded but we expected error.");
     }
 }
-
-void wish_relay_client_close(wish_core_t* core, wish_relay_client_t *relay) {
-    close(relay->sockfd);
-    relay_ctrl_disconnect_cb(core, relay);
-}
-
-
-
-

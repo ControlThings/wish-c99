@@ -9,17 +9,17 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <assert.h>
+#include <stdlib.h>
 
 #include "dns.h"
 #include "port_dns.h"
+#include "port_relay_client.h"
 #include "wish_connection.h"
+#include "wish_connection_mgr.h"
 #include "utlist.h"
 
 #define EXIT_FAILURE 1
 
-#ifdef DNS_TEST
-#include <stdlib.h>
-#endif
 
 static void dns_panic(const char *fmt, ...) {
 	va_list ap;
@@ -29,6 +29,7 @@ static void dns_panic(const char *fmt, ...) {
 	vfprintf(stderr, fmt, ap);
 
 	exit(EXIT_FAILURE);
+
 
 } /* panic() */
 
@@ -123,13 +124,14 @@ error:
 struct port_dns_resolver {
     struct dns_resolver *R;
     wish_connection_t* wish_conn; //If this is non-NULL then resolving is for a wish connection
+    
     wish_relay_client_t *relay_client; //if this is non-NULL then resolving is for a relay client connection
     struct port_dns_resolver *next;
 };
 
 struct port_dns_resolver* resolver_list = NULL;
 
-int port_dns_start_resolving_wish_conn(wish_connection_t *conn, char *qname) {
+static struct port_dns_resolver *port_dns_resolver_create(char *qname) {
     const _Bool recurse = false;
     
     struct dns_hints *(*hints)() = (recurse)? &dns_hints_root : &dns_hints_local;
@@ -150,54 +152,44 @@ int port_dns_start_resolving_wish_conn(wish_connection_t *conn, char *qname) {
     }
     
     struct port_dns_resolver *port_resolver = malloc(sizeof(struct port_dns_resolver));
+    if (port_resolver == NULL) {
+        dns_panic("%s: %s", qname, "Can't malloc resource");
+    }
     memset(port_resolver, 0, sizeof(struct port_dns_resolver));
     
     port_resolver->R = R;
-    port_resolver->wish_conn = conn;
-    
+    return port_resolver;
+}
+
+int port_dns_start_resolving_wish_conn(wish_connection_t *conn, char *qname) {
+    printf("Starting resolving %s (wish connection)\n", qname);
+    struct port_dns_resolver *resolver = port_dns_resolver_create(qname);
+    resolver->wish_conn = conn;
+
     /* Add the newly allocated resolver to our list of resolvers */
-    LL_APPEND(resolver_list, port_resolver);
+    LL_APPEND(resolver_list, resolver);
     
     return 0;
 }
 
 int port_dns_start_resolving_relay_client(wish_relay_client_t *rc, char *qname) {
-    const _Bool recurse = false;
-    
-    struct dns_hints *(*hints)() = (recurse)? &dns_hints_root : &dns_hints_local;
-    
-    enum dns_type qtype = DNS_T_A;
-    int error = 0;
-
-    resconf()->options.recurse = recurse;
-
-    struct dns_resolver *R = NULL;
-    
-    if (!(R = dns_res_open(resconf(), hosts(), dns_hints_mortal(hints(resconf(), &error)), cache(), dns_opts(), &error))) {
-            dns_panic("%s: %s", qname, dns_strerror(error));
-    }
-
-    if ((error = dns_res_submit(R, qname, qtype, DNS_C_IN))) {
-            dns_panic("%s: %s", qname, dns_strerror(error));
-    }
-    
-    struct port_dns_resolver *port_resolver = malloc(sizeof(struct port_dns_resolver));
-    memset(port_resolver, 0, sizeof(struct port_dns_resolver));
-    
-    port_resolver->R = R;
-    port_resolver->relay_client = rc;
+    printf("Starting resolving %s (relay client)\n", qname);
+    struct port_dns_resolver *resolver = port_dns_resolver_create(qname);
+    resolver->relay_client = rc;
     
     /* Add the newly allocated resolver to our list of resolvers */
-    LL_APPEND(resolver_list, port_resolver);
+    LL_APPEND(resolver_list, resolver);
     
     return 0;
 }
 
-int dns_poll_resolvers(void) {
+int port_dns_poll_resolvers(void) {
     
     /* For each resolver in list of resolvers ... */
     struct port_dns_resolver *resolver = NULL, *tmp = NULL;
+    
     LL_FOREACH_SAFE(resolver_list, resolver, tmp) {
+        assert((resolver->wish_conn != NULL) ^ (resolver->relay_client != NULL));
         int error = dns_res_check(resolver->R);
     
         if (dns_res_elapsed(resolver->R) > 30) {
@@ -211,6 +203,7 @@ int dns_poll_resolvers(void) {
 #ifdef DNS_TEST
             dns_res_poll(resolver->R, 1);
 #endif
+            /* FIXME: We should add the resolver's filedescriptor to the port's main select() call. */
         }
         else if (error == 0) {
             /* Query finished */
@@ -223,7 +216,7 @@ int dns_poll_resolvers(void) {
             int len = 0;
             
             enum dns_rcode response_code = dns_p_rcode(ans);
-            
+                        
             switch (response_code) {
                 case DNS_RC_NOERROR:
                     while (dns_rr_grep(&rr, 1, I, ans, &error)) {
@@ -234,12 +227,23 @@ int dns_poll_resolvers(void) {
                                 
 #ifndef DNS_TEST
                                 //Continue opening the connection with new info (connection or relay client)
-                                assert(resolver->wish_conn != NULL ^ resolver->relay_client != NULL);
                                 if (resolver->wish_conn) {
+                                    /* We were resolving for a normal wish connection */
+                                    wish_ip_addr_t ip;
+                                    wish_parse_transport_ip(pretty, 0, &ip);
                                     
+                                    /* References to wish core, port and via relay are already initialized by wish_open_connection_dns */
+                                    wish_core_t *core = resolver->wish_conn->core;
+                                    uint16_t port = resolver->wish_conn->remote_port;
+                                    bool via_relay = resolver->wish_conn->via_relay;
+                                    
+                                    wish_open_connection(core, resolver->wish_conn, &ip, port, via_relay);
                                 }
                                 else if (resolver->relay_client) {
-                                    
+                                    /* We were resolving for a relay client connection */
+                                    wish_ip_addr_t ip;
+                                    wish_parse_transport_ip(pretty, 0, &ip);
+                                    port_relay_client_open(resolver->relay_client, &ip);
                                 }
 #endif                                
                                 break; //while loop testing dns_rr_grep()
@@ -254,32 +258,49 @@ int dns_poll_resolvers(void) {
                 case DNS_RC_NXDOMAIN:
                     printf("Could not resolve the domain name\n");
 #ifndef DNS_TEST
-                    //abort connection
+                    if (resolver->wish_conn) {
+                        /* Note: Don't call wish_close_connection() here, as it will do (platform-dependent) things set up by wish_open_connection(), which has not been called in this case. */
+                        /* References to wish core, port and via relay are already initialized by wish_open_connection_dns */
+                        wish_core_t *core = resolver->wish_conn->core;
+                        wish_core_signal_tcp_event(core, resolver->wish_conn, TCP_DISCONNECTED);
+                    }
+                    else if (resolver->relay_client) {
+                        resolver->relay_client->curr_state = WISH_RELAY_CLIENT_WAIT_RECONNECT;
+                    }
 #endif
                     break;
                 default:
                     printf("Unexpected DNS response code %i\n", response_code);
 #ifndef DNS_TEST
-                    //abort connection
+                    if (resolver->wish_conn) {
+                        /* Note: Don't call wish_close_connection() here, as it will do (platform-dependent) things set up by wish_open_connection(), which has not been called in this case. */
+                        wish_core_t *core = resolver->wish_conn->core;
+                        wish_core_signal_tcp_event(core, resolver->wish_conn, TCP_DISCONNECTED);
+                    }
+                    else if (resolver->relay_client) {
+                        resolver->relay_client->curr_state = WISH_RELAY_CLIENT_WAIT_RECONNECT;
+                    }
 #endif
                     break;
             }
             
-            
+              //close the resolving
             free(ans);
 
             dns_res_close(resolver->R);
             LL_DELETE(resolver_list, resolver);
             free(resolver);
-            
-            
-            //close the resolving
+          
 #ifdef DNS_TEST
             exit(0);
 #endif
         }
         else {
-            dns_panic("dns_res_check: %s (%d)", dns_strerror(error), error);
+            //dns_panic("dns_res_check: %s (%d)", dns_strerror(error), error);
+            printf("DNS resolver error %s (%i)\n", dns_strerror(error), error);
+            dns_res_close(resolver->R);
+            LL_DELETE(resolver_list, resolver);
+            free(resolver);
         }
     }
    
@@ -291,7 +312,7 @@ int dns_poll_resolvers(void) {
 int main(void) {
     port_dns_start_resolving_wish_conn(NULL, "nowww.controlthings.fi");
     while (1) {
-        dns_poll_resolvers();
+        port_dns_poll_resolvers();
     }
 }
 
