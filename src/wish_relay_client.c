@@ -27,6 +27,7 @@
 #include "utlist.h"
 
 #include "wish_core.h"
+#include "wish_ip_addr.h"
 
 void relay_ctrl_connected_cb(wish_core_t* core, wish_relay_client_t *relay) {
     WISHDEBUG(LOG_CRITICAL, "Relay control connection established");
@@ -81,6 +82,7 @@ static void wish_core_relay_periodic(wish_core_t* core, void* ctx) {
                     wish_relay_client_periodic(core, relay);
                 }
                 break;
+            case WISH_RELAY_CLIENT_RESOLVING:
             default:
                 break;
         }
@@ -108,13 +110,19 @@ void wish_relay_client_add(wish_core_t* core, const char* host) {
     wish_relay_client_t* relay = wish_platform_malloc(size);
     memset(relay, 0, size);
 
-    wish_parse_transport_ip_port(host, 22, &relay->ip, &relay->port);
+    size_t host_len = strnlen(host, RELAY_SERVER_HOST_MAX_LEN);
+    if (wish_parse_transport_host_port(host, host_len, relay->host, &relay->port) != RET_SUCCESS) {
+        WISHDEBUG(LOG_CRITICAL, "wish_realy_client_add: Cannot parse transport host port");
+        wish_platform_free(relay);
+        return;
+    }
+
 
     wish_relay_client_t* elt;
     
     bool found = false;
     LL_FOREACH(core->relay_db, elt) {
-        if ( memcmp(&elt->ip.addr, &relay->ip.addr, 4) == 0 && elt->port == relay->port ) {
+        if ( strncmp(elt->host, relay->host, RELAY_SERVER_HOST_MAX_LEN) == 0 && elt->port == relay->port ) {
             // already in list, bailing
             found = true;
             break;
@@ -133,6 +141,7 @@ void wish_relay_client_add(wish_core_t* core, const char* host) {
 void wish_relay_client_periodic(wish_core_t* core, wish_relay_client_t *relay) {
 again:
     switch (relay->curr_state) {
+    case WISH_RELAY_CLIENT_RESOLVING:
     case WISH_RELAY_CLIENT_CONNECTING:
         
         break;
@@ -209,9 +218,15 @@ again:
                 connection->relay = relay;
                 connection->via_relay = true;
 
-                /* FIXME Implement some kind of abstraction for IP
-                 * addresses */
-                wish_open_connection(core, connection, &(relay->ip), relay->port, true);
+                /* Now determine if we have an IP address, or do we need to resolve */
+                wish_ip_addr_t ip;
+                if (wish_parse_transport_ip(relay->host, 0, &ip) == RET_SUCCESS) {
+                    /* We have an IP addr as relay hostname */
+                    wish_open_connection(core, connection, &ip, relay->port, true);
+                }
+                else {
+                    wish_open_connection_dns(core, connection, relay->host, relay->port, true);
+                }
                 goto again;
                 break;
             }
@@ -246,7 +261,7 @@ int wish_relay_get_preferred_server_url(char *url_str, int url_str_max_len) {
     return 0;
 }
 
-int wish_relay_encode_as_url(char *url_str, wish_ip_addr_t *ip, int port) {
-    wish_platform_sprintf(url_str, "wish://%d.%d.%d.%d:%d", ip->addr[0], ip->addr[1], ip->addr[2], ip->addr[3], port);
+int wish_relay_encode_as_url(char *url_str, char *host, int port) {
+    wish_platform_sprintf(url_str, "wish://%s:%d", host, port);
     return 0;
 }

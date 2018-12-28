@@ -22,6 +22,8 @@
 #include "wish_time.h"
 #include "wish_utils.h"
 
+#define RELAY_SERVER_HOST_MAX_LEN   64
+
 /* Define Relay server IP and port: */
 #ifndef RELAY_SERVER_HOST
 #define RELAY_SERVER_HOST "193.65.54.131:40000"
@@ -37,6 +39,7 @@
 
 enum wish_relay_client_state {
     WISH_RELAY_CLIENT_INITIAL,  /* The initial state */
+    WISH_RELAY_CLIENT_RESOLVING,
     WISH_RELAY_CLIENT_CONNECTING,  /* The relay client connection has been started, but has not yet connected */
     WISH_RELAY_CLIENT_OPEN,     /* The state where the client sends the
     preamble + uid */
@@ -64,8 +67,8 @@ typedef struct wish_relay_client_ctx {
     int (*send)(int, unsigned char*, int);
     ring_buffer_t rx_ringbuf;
     uint8_t rx_ringbuf_storage[RELAY_CLIENT_RX_RB_LEN];
-    /* The Relay server's IP address */
-    wish_ip_addr_t ip;
+    /* The Relay server's IP/hostname, without the port, and without wish:// in the beginning */
+    char host[RELAY_SERVER_HOST_MAX_LEN];
     uint16_t port;
     /** This timestamp is updated every time data is fed into the relay
      * server system. User for detecting dead relay server control
@@ -104,7 +107,7 @@ void wish_relay_client_feed(wish_core_t* core, wish_relay_client_t *rctx,
 
 int wish_relay_get_preferred_server_url(char *url_str, int url_str_len);
 
-int wish_relay_encode_as_url(char *url_str, wish_ip_addr_t *ip, int port);
+int wish_relay_encode_as_url(char *url_str, char *host, int port);
 
 /** 
  * Check timeout status on the relay contexts 

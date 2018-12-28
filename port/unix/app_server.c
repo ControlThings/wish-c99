@@ -88,7 +88,7 @@ void setup_app_server(wish_core_t* core, uint16_t app_port) {
     app_serverfd = socket(AF_INET, SOCK_STREAM, 0);
     if (app_serverfd < 0) {
         perror("App server socket creation");
-        exit(1);
+        abort();
     }
     int option = 1;
     setsockopt(app_serverfd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
@@ -101,7 +101,7 @@ void setup_app_server(wish_core_t* core, uint16_t app_port) {
     if (bind(app_serverfd, (struct sockaddr *) &server_addr, 
             sizeof(server_addr)) < 0) {
         perror("ERROR on binding");
-        exit(1);
+        abort();
     }
     int connection_backlog = 1;
     if (listen(app_serverfd, connection_backlog) < 0) {
@@ -114,7 +114,7 @@ void setup_app_server(wish_core_t* core, uint16_t app_port) {
         uint8_t *backing = (uint8_t *) malloc(APP_RX_RB_SZ);
         if (backing == NULL) {
             printf("Could not allocate app connection rb backing\n");
-            exit(1);
+            abort();
         }
         ring_buffer_init(&app_rx_ring_bufs[i], backing, APP_RX_RB_SZ);
         app_transport_states[i] = APP_TRANSPORT_INITIAL;

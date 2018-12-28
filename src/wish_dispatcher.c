@@ -181,10 +181,10 @@ void wish_core_create_handshake_msg(wish_core_t* core, wish_connection_t* conn, 
         char index[21];
         BSON_NUMSTR(index, i++);
         
-        char host[29];
+        size_t transport_max_len = RELAY_SERVER_HOST_MAX_LEN + 8;
+        char host[transport_max_len];
         
-        wish_platform_snprintf(host, 29, "wish://%d.%d.%d.%d:%d", relay->ip.addr[0], relay->ip.addr[1], relay->ip.addr[2], relay->ip.addr[3], relay->port);
-        host[28] = '\0';
+        wish_platform_snprintf(host, transport_max_len, "wish://%s:%d", relay->host, relay->port);
         
         bson_append_string(&bs, index, host);
     }

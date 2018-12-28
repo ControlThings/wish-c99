@@ -3,7 +3,11 @@ cmake_minimum_required(VERSION 2.8.8)
 
 #set(CMAKE_C_FLAGS "-Wall -std=c99 -Wno-pointer-sign")
 #set(CMAKE_C_FLAGS "-Wall -m32 -Wno-pointer-sign -Wno-unused-variable")
+
 set(CMAKE_C_FLAGS "-Wall -Wno-pointer-sign -Wno-unused-variable")
+if (CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 5.0)
+    list(APPEND CMAKE_C_FLAGS "-std=gnu99")
+endif()
 set(CMAKE_C_FLAGS_RELEASE "-Os -O3")
 set(CMAKE_C_FLAGS_DEBUG "-O0 -g")
 
@@ -58,11 +62,12 @@ set(TEST_EXECUTABLE2 "test_bson_update")
 add_definitions( "-DWISH_CORE_VERSION_STRING=\"${WISH_CORE_VERSION_STRING}\"") 
 #add_definitions( "-DWLD_META_PRODUCT=\"${WLD_META_PRODUCT}\"") 
 
-include_directories(src port/unix deps/bson deps/ed25519/src deps/mbedtls/include deps/uthash/include deps/wish-rpc-c99/src)
+include_directories(src port/unix deps/bson deps/ed25519/src deps/mbedtls/include deps/uthash/include deps/wish-rpc-c99/src deps/dns/src)
 
 file(GLOB wish_SRC "src/*.c")
 file(GLOB wish_port_SRC "port/unix/*.c")
-file(GLOB_RECURSE wish_deps_SRC "deps/bson/*.c" "deps/ed25519/src/*.c" "deps/mbedtls/library/*.c" "deps/uthash/src/*.c" "deps/wish-rpc-c99/src/*.c")
+file(GLOB_RECURSE wish_deps_SRC "deps/bson/*.c" "deps/ed25519/src/*.c"
+"deps/mbedtls/library/*.c" "deps/uthash/src/*.c" "deps/wish-rpc-c99/src/*.c" "deps/dns/src/dns.c")
 
 list(REMOVE_ITEM wish_port_SRC "${CMAKE_SOURCE_DIR}/port/unix/test_bson.c")
 list(REMOVE_ITEM wish_port_SRC "${CMAKE_SOURCE_DIR}/port/unix/test_bson_update.c")

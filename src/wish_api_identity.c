@@ -1181,10 +1181,26 @@ void wish_api_identity_friend_request(rpc_server_req* req, const uint8_t* args) 
     wish_ip_addr_t ip;
     uint16_t port;
     
-    wish_parse_transport_ip_port(transport, strnlen(transport, 32), &ip, &port);
-    
-    //WISHDEBUG(LOG_CRITICAL, "Will start a friend req connection to: %u.%u.%u.%u\n", ip.addr[0], ip.addr[1], ip.addr[2], ip.addr[3]);
-    wish_open_connection(core, connection, &ip, port, false);
+    /* Here must we handle transport being a FQDN, friend requests will have such transports! */
+    if (wish_parse_transport_ip_port(transport, strnlen(transport, 32), &ip, &port) == RET_SUCCESS) {
+        /* The transport was successfully parsed to an IP address / port, connect directly (without DNS resolving) */
+        //WISHDEBUG(LOG_CRITICAL, "Will start a friend req connection to: %u.%u.%u.%u\n", ip.addr[0], ip.addr[1], ip.addr[2], ip.addr[3]);
+        wish_open_connection(core, connection, &ip, port, false);
+    }
+    else {
+        /* The transport could not be parsed as IP, try to transport as hostname/port and connect with a DNS resolving step. */
+        char host[WISH_MAX_TRANSPORT_LEN] = { 0 };
+        if (wish_parse_transport_host_port(transport, WISH_MAX_TRANSPORT_LEN, host, &port) == RET_SUCCESS) {
+            WISHDEBUG(LOG_CRITICAL, "Will start a friend req connection to: %s:%d\n", host, port);
+            wish_open_connection_dns(core, connection, host, port, false);
+        }
+        else {
+            WISHDEBUG(LOG_CRITICAL, "Cannot open a friend request connection because IP and port or hostname and port could not be parsed from the transport.");
+            wish_close_connection(core, connection);
+            rpc_server_error_msg(req, 341, "Cannot open a friend request connection because IP and port or hostname and port could not be parsed from the transport.");
+            return;
+        }
+    }
     
     uint8_t buffer[WISH_PORT_RPC_BUFFER_SZ];
 
@@ -1325,8 +1341,13 @@ static return_t wish_ldiscover_entry_from_bson(const char* signed_meta, wish_ldi
     bson_iterator_init(&it, &data);
     bson_find_fieldpath_value("transports.0", &it);
     if (bson_iterator_type(&it) != BSON_STRING) { return RET_E_INVALID_INPUT; }
-    wish_parse_transport_ip_port(bson_iterator_string(&it), bson_iterator_string_len(&it), &out->transport_ip, &out->transport_port);
     
+    /* FIXME Here must we handle transport being a hostname, as in the future wld broadcasts can have FQDN transports?? */
+    if (wish_parse_transport_ip_port(bson_iterator_string(&it), bson_iterator_string_len(&it), &out->transport_ip, &out->transport_port) != RET_SUCCESS) {
+        WISHDEBUG(LOG_CRITICAL, "Could not parse ip or port from the transport in the wld packet.");
+        return RET_FAIL;
+    }
+
     out->timestamp = UINT32_MAX;
     
     return RET_SUCCESS;

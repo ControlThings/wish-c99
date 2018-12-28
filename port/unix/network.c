@@ -68,7 +68,7 @@ static void find_local_ip_default_route(char *addr_buffer,
     if (getifaddrs(&ifaddr) == -1) 
     {
         perror("getifaddrs");
-        exit(EXIT_FAILURE);
+        abort();
     }
  
     //Walk through linked list, maintaining head pointer so we can free list later
@@ -90,7 +90,7 @@ static void find_local_ip_default_route(char *addr_buffer,
                 if (s != 0) 
                 {
                     printf("getnameinfo() failed: %s\n", gai_strerror(s));
-                    exit(EXIT_FAILURE);
+                    abort();
                 }
                  
                 ////printf("address: %s", host);
