@@ -101,7 +101,6 @@ return_t wish_parse_transport_ip(const char *url, size_t url_len, wish_ip_addr_t
     }
     char* colon = strchr(start_of_ip_str, ':');
     if (colon == NULL) {
-        WISHDEBUG(LOG_CRITICAL, "no colon in ip str, this is ok but terrible actually");
         /* There's no colon, set colon to be end of string */
         colon = (char*) url+strlen(url) + 1;
     }
@@ -124,15 +123,14 @@ return_t wish_parse_transport_ip(const char *url, size_t url_len, wish_ip_addr_t
      * length actual_ip_str_len */
 
     /* Parse out the bytes */
-    const int num_bytes = 4; /* There are always 4 dots */
+    const int num_bytes = 4; /* There are always 3 dots */
     const char *curr_byte_str = start_of_ip_str;
     int i = 0;
     for (i = 0; i < num_bytes; i++) {
         //WISHDEBUG(LOG_CRITICAL, "curr_byte_str: %s", curr_byte_str);
         ip->addr[i] = atoi(curr_byte_str);
         curr_byte_str = strchr(curr_byte_str, '.'); //Find the next '.' in the ip addr
-        if (curr_byte_str == NULL && i != 3) {
-            WISHDEBUG(LOG_CRITICAL, "IP parse error");
+        if (curr_byte_str == NULL && i != 3) { // Note: when i == 3, it is expect that the next dot is not found.
             return retval;
         }
         curr_byte_str += 1; //advance to the start of next byte, past the '.'
