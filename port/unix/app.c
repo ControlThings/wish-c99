@@ -96,10 +96,9 @@ void connect_fail_cb(wish_connection_t* connection) {
     wish_core_signal_tcp_event(connection->core, connection, TCP_DISCONNECTED);
 }
 
+
 /**
  * Implementation of the port layer wish connection function.
- * 
- * FIXME Note that this implementation could block because of the DNS resolution.
  * 
  * @param core
  * @param connection
@@ -108,10 +107,10 @@ void connect_fail_cb(wish_connection_t* connection) {
  * @param via_relay
  * @return 
  */
-#if 0
 int wish_open_connection_dns(wish_core_t* core, wish_connection_t* connection, char* host, uint16_t port, bool via_relay) {
     connection->curr_transport_state = TRANSPORT_STATE_RESOLVING;
     
+#ifdef WISH_CONNECTION_BLOCKING_DNS
     /* This is a filter. Specify that we are interested only in IPv4 addresses. */
     struct addrinfo addrinfo_filter = { .ai_family = AF_INET, .ai_socktype = SOCK_STREAM };
     struct addrinfo *addrinfo_res = NULL;
@@ -135,16 +134,14 @@ int wish_open_connection_dns(wish_core_t* core, wish_connection_t* connection, c
         /* Note: Don't call wish_close_connection() here, as it will do (platform-dependent) things set up by wish_open_connection(), which has not been called in this case. */
         wish_core_signal_tcp_event(core, connection, TCP_DISCONNECTED);
     }
-    
-    return 0;
-}
-#endif
-int wish_open_connection_dns(wish_core_t* core, wish_connection_t* connection, char* host, uint16_t port, bool via_relay) {
-    connection->curr_transport_state = TRANSPORT_STATE_RESOLVING;
+#else
+
     connection->core = core;
     connection->remote_port = port;
     connection->via_relay = via_relay;
-    port_dns_start_resolving_wish_conn(connection, host);
+    port_dns_start_resolving_wish_conn(connection, host);  
+    
+#endif 
     
     return 0;
 }
@@ -556,6 +553,7 @@ int main(int argc, char** argv) {
 
     while (1) {
         port_select_reset();
+        port_dns_poll_resolvers();
         
         if (as_server) {
             port_select_fd_set_readable(serverfd);
@@ -607,16 +605,17 @@ int main(int argc, char** argv) {
             if (ctx->context_state == WISH_CONTEXT_FREE) {
                 continue;
             }
+            else if (ctx->curr_transport_state == TRANSPORT_STATE_RESOLVING) {
+                /* The transport host addr is being resolved, sockfd is not valid and indeed should not be added to any of the sets! */
+                continue;
+            }
+            
             int sockfd = *((int *) ctx->send_arg);
             if (ctx->curr_transport_state == TRANSPORT_STATE_CONNECTING) {
                 /* If the socket has currently a pending connect(), set
                  * the socket in the set of writable FDs so that we can
                  * detect when connect() is ready */
                 port_select_fd_set_writable(sockfd);
-            }
-            else if (ctx->curr_transport_state == TRANSPORT_STATE_RESOLVING) {
-                /* The transport host addr is being resolved, sockfd is not valid and indeed should not be added to any of the sets! */
-                continue;
             }
             else {
                 port_select_fd_set_readable(sockfd);
@@ -750,6 +749,11 @@ int main(int argc, char** argv) {
                 if (ctx->context_state == WISH_CONTEXT_FREE) {
                     continue;
                 }
+                else if (ctx->curr_transport_state == TRANSPORT_STATE_RESOLVING) {
+                    /* The transport host addr is being resolved, sockfd is not valid */
+                    continue;
+                }
+                
                 int sockfd = *((int *)ctx->send_arg);
                 if (port_select_fd_is_readable(sockfd)) {
                     /* The Wish connection socket is now readable. Data
@@ -902,8 +906,6 @@ int main(int argc, char** argv) {
             periodic_timestamp = time(NULL);
             wish_time_report_periodic(core);
         }
-        
-        port_dns_poll_resolvers();
     }
 
     return 0;
