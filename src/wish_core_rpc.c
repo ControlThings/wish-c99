@@ -565,12 +565,13 @@ static void core_friend_req(rpc_server_req* req, const uint8_t* args) {
     bson_finish(&bs);
 
     wish_core_signals_emit(core, &bs);
+    wish_close_connection(core, connection);
 }
 
 static void friend_req_callback(rpc_client_req* req, void* context, const uint8_t* payload, size_t payload_len) {
     wish_core_t *core = req->client->context;
     
-    //bson_visit("Friend req callback, payload: ", payload);
+    bson_visit("Friend req callback (requestor's side), payload: ", payload);
     /*
     data: {
         data: Buffer(0x6b 00 00 00 ...)

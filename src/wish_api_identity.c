@@ -1068,8 +1068,8 @@ void wish_api_identity_friend_request(rpc_server_req* req, const uint8_t* args) 
     bson_iterator_from_buffer(&data, bson_iterator_bin_data(&it));
     
     const char* ruid = NULL;
-    //const char* pubkey = NULL;
-    //const char* alias = NULL;
+    const char* pubkey = NULL;
+    const char* alias = NULL;
     
     bson_find_fieldpath_value("uid", &data);
     
@@ -1088,7 +1088,7 @@ void wish_api_identity_friend_request(rpc_server_req* req, const uint8_t* args) 
         return;
     }
 
-    //pubkey = bson_iterator_bin_data(&data);
+    pubkey = bson_iterator_bin_data(&data);
     
     bson_iterator_from_buffer(&data, bson_iterator_bin_data(&it));
     bson_find_fieldpath_value("alias", &data);
@@ -1098,7 +1098,7 @@ void wish_api_identity_friend_request(rpc_server_req* req, const uint8_t* args) 
         return;
     }
 
-    //alias = bson_iterator_string(&data);
+    alias = bson_iterator_string(&data);
 
     if(luid[0] == 0 && luid[1] == 0 && ruid[0] == 0 && ruid[1] == 0)  {
         WISHDEBUG(LOG_CRITICAL, "Blaaah! --------------------------------------------------------!!");
@@ -1132,8 +1132,8 @@ void wish_api_identity_friend_request(rpc_server_req* req, const uint8_t* args) 
     }
     
     //WISHDEBUG(LOG_CRITICAL, "alias for remote friend req: %s", alias);
-    //WISHDEBUG(LOG_CRITICAL, "tranport for remote friend req: %s", transport);
-
+    //WISHDEBUG(LOG_CRITICAL, "transport for remote friend req: %s", transport);
+    
     // check optional argument 3; 
     bson_find_from_buffer(&it, args, "2");
     
@@ -1200,6 +1200,21 @@ void wish_api_identity_friend_request(rpc_server_req* req, const uint8_t* args) 
             rpc_server_error_msg(req, 341, "Cannot open a friend request connection because IP and port or hostname and port could not be parsed from the transport.");
             return;
         }
+    }
+    
+    // We have the friendrequestee's alias, ruid, pubkey and transports. We can now add the friend requestee to our contacts
+    if (wish_identity_exists((uint8_t*) ruid) == 0) {
+        /* Identity does not exist in our database */
+        wish_identity_t new_id = { 0 };
+        new_id.has_privkey = false;
+        memcpy(new_id.uid, ruid, WISH_ID_LEN);
+        strncpy(new_id.alias, alias, WISH_ALIAS_LEN);
+        memcpy(new_id.pubkey, pubkey, WISH_PUBKEY_LEN);
+        strncpy(new_id.transports[0], transport, WISH_MAX_TRANSPORT_LEN);
+        
+        wish_save_identity_entry(&new_id);
+        /* Flag the identity somehow, eg. by adding meta "friendRequestSent: <timestamp>"
+         This flag would then be removed when a connection is established for the first time - or then it could be used for removing friend reqested contacts that have been lingering for too long */
     }
     
     uint8_t buffer[WISH_PORT_RPC_BUFFER_SZ];
@@ -1436,8 +1451,9 @@ void wish_api_identity_friend_request_accept(rpc_server_req* req, const uint8_t*
     }
 
     if (!found) {
-        rpc_server_error_msg(req, 344, "Friend request connection not found while trying to accept.");
-        return;
+        WISHDEBUG(LOG_CRITICAL, "The friend request connection is not found, this OK now");
+        //rpc_server_error_msg(req, 344, "Friend request connection not found while trying to accept.");
+        //return;
     }
 
     
@@ -1532,10 +1548,12 @@ void wish_api_identity_friend_request_accept(rpc_server_req* req, const uint8_t*
         }
     }
 
-    rpc_server_send(&(elt->friend_rpc_req), bson_data(&b), bson_size(&b));
-    
-    //WISHDEBUG(LOG_CRITICAL, "Send friend req reply, closing connection now");
-    wish_close_connection(core, wish_connection);
+    if (wish_connection) {
+        rpc_server_send(&(elt->friend_rpc_req), bson_data(&b), bson_size(&b));
+
+        //WISHDEBUG(LOG_CRITICAL, "Send friend req reply, closing connection now");
+        wish_close_connection(core, wish_connection);
+    }
             
     
     /* Send RPC reply to the App that performed the friendRequestAccept RPC*/
@@ -1648,17 +1666,20 @@ void wish_api_identity_friend_request_decline(rpc_server_req* req, const uint8_t
     }
 
     if (!found) {
-        rpc_server_error_msg(req, 344, "Friend request connection not found while trying to accept.");
-        return;
+        WISHDEBUG(LOG_CRITICAL, "The friend request connection is not found when declining, this OK now");
+        //rpc_server_error_msg(req, 344, "Friend request connection not found while trying to accept.");
+        //return;
     }
     
     // found the connection (wish_connection)
     
     WISHDEBUG(LOG_CRITICAL, "Declining friend request (informing requester) and closing connection");
     
-    /* Send a relationship decline notification to remote core, as an RPC error */
-    rpc_server_error_msg(&(elt->friend_rpc_req), 123, "Declining friend request.");
-    wish_close_connection(core, wish_connection);
+    if (wish_connection) {
+        /* Send a relationship decline notification to remote core, as an RPC error */
+        rpc_server_error_msg(&(elt->friend_rpc_req), 123, "Declining friend request.");
+        wish_close_connection(core, wish_connection);
+    }
     
     int buffer_len = WISH_PORT_RPC_BUFFER_SZ;
     uint8_t buffer[buffer_len];

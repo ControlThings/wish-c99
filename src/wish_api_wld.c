@@ -240,6 +240,20 @@ void wish_api_wld_friend_request(rpc_server_req* req, const uint8_t* args) {
         rpc_server_error_msg(req, 304, "Wld entry not found.");
         return;
     }
+    
+    // We have the friendrequestee's alias, ruid, pubkey and transports. We can now add the friend requestee to our contacts
+    if (wish_identity_exists((uint8_t*) db[i].ruid) == 0) {
+        /* Identity does not exist in our database */
+        wish_identity_t new_id = { 0 };
+        new_id.has_privkey = false;
+        memcpy(new_id.uid, db[i].ruid, WISH_ID_LEN);
+        strncpy(new_id.alias, db[i].alias, WISH_ALIAS_LEN);
+        memcpy(new_id.pubkey, db[i].pubkey, WISH_PUBKEY_LEN);
+        wish_platform_snprintf(new_id.transports[0], WISH_MAX_TRANSPORT_LEN, "%d.%d.%d.%d:%d", db[i].transport_ip.addr[0], db[i].transport_ip.addr[1], db[i].transport_ip.addr[2], db[i].transport_ip.addr[3], db[i].transport_port);        
+        wish_save_identity_entry(&new_id);
+        /* Flag the identity somehow, eg. by adding meta "friendRequestSent: <timestamp>"
+         This flag would then be removed when a connection is established for the first time - or then it could be used for removing friend reqested contacts that have been lingering for too long */
+    }
 
     wish_connection_t* connection = wish_connection_init(core, luid, ruid);
     connection->friend_req_connection = true;
