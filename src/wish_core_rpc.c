@@ -545,10 +545,10 @@ static void core_friend_req(rpc_server_req* req, const uint8_t* args) {
      * contacts */
     //memcpy(ctx->pending_friend_req_id, friend_req_id, SIZEOF_ID)
 
-    /* Save the recipient UID of the friend request as luid for the
-     * context. This information will be used later when exporting
+    /* The recipient UID of the friend request (luid of the
+     * context) is already initialised, just copy ruid. This information will be used later when exporting
      * the cert */
-    memcpy(connection->luid, recepient_uid, WISH_ID_LEN);
+   
     memcpy(connection->ruid, new_id->uid, WISH_ID_LEN);
 
     //WISHDEBUG(LOG_CRITICAL, "Friend request to luid: %02x %02x %02x %02x", connection->luid[0], connection->luid[1], connection->luid[2], connection->luid[3]);
