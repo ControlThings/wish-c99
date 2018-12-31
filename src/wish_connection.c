@@ -618,6 +618,23 @@ void wish_core_signal_tcp_event(wish_core_t* core, wish_connection_t* connection
         }
         
         if (connection->friend_req_connection) {
+
+            if (connection->outgoing) {
+                /* We were the initiator of a friend request connection. As we have added the friend to our contact db already when initiating the friend request,
+                 * but we had flagged the contact as 'do not connect', remove the flag so that the wish core starts connecting, in hope of the remote party to accept friend request at a later time. */
+                wish_identity_t id;
+                if (wish_identity_load(connection->ruid, &id) != RET_SUCCESS) {
+                    WISHDEBUG(LOG_CRITICAL, "Could not load the identity, outgoing friend request");
+                }
+                else {
+                    if (wish_identity_get_meta_unconfirmed_friend_request(&id)) {
+                        WISHDEBUG(LOG_CRITICAL, "Removing meta: { connect: false } flag for outgoing friend request for which we have not received response yet.");
+                        wish_identity_remove_meta_connect(core, connection->ruid);
+                    }
+                }
+                wish_identity_destroy(&id);
+            }
+
             if (connection->friend_req_meta) {
                 wish_platform_free(connection->friend_req_meta);
             }

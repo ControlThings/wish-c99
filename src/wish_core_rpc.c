@@ -565,7 +565,6 @@ static void core_friend_req(rpc_server_req* req, const uint8_t* args) {
     bson_finish(&bs);
 
     wish_core_signals_emit(core, &bs);
-    wish_close_connection(core, connection);
 }
 
 static void friend_req_callback(rpc_client_req* req, void* context, const uint8_t* payload, size_t payload_len) {
@@ -646,6 +645,9 @@ static void friend_req_callback(rpc_client_req* req, void* context, const uint8_
         wish_save_identity_entry(&new_friend_id);
         wish_core_signals_emit_string(core, "identity");
     }
+    
+    wish_identity_remove_meta_outgoing_friend_request(core, new_friend_id.uid);
+    wish_identity_remove_meta_connect(core, new_friend_id.uid);
     
     /* emit friendRequesteeAccepted even if it was an identity which already existed */
     wish_core_signals_emit_string(core, "friendRequesteeAccepted");

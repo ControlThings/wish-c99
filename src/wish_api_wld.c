@@ -251,8 +251,12 @@ void wish_api_wld_friend_request(rpc_server_req* req, const uint8_t* args) {
         memcpy(new_id.pubkey, db[i].pubkey, WISH_PUBKEY_LEN);
         wish_platform_snprintf(new_id.transports[0], WISH_MAX_TRANSPORT_LEN, "%d.%d.%d.%d:%d", db[i].transport_ip.addr[0], db[i].transport_ip.addr[1], db[i].transport_ip.addr[2], db[i].transport_ip.addr[3], db[i].transport_port);        
         wish_save_identity_entry(&new_id);
-        /* Flag the identity somehow, eg. by adding meta "friendRequestSent: <timestamp>"
-         This flag would then be removed when a connection is established for the first time - or then it could be used for removing friend reqested contacts that have been lingering for too long */
+        /* Flag the potential friend contact as an "unconfirmed friend request", and flag it also so that the wish core will not attempt normal connections to it for the time being.
+         When the friend request connection is closed, if the the friend request is still not answered, remove the connect: false flag so that we may start attempting connections,
+         whilst waiting for the remote end to some day accept the friend request. */
+        wish_identity_add_meta_connect(core, (uint8_t*) db[i].ruid, false);
+        wish_identity_add_meta_unconfirmed_friend_request(core, db[i].ruid);
+
     }
 
     wish_connection_t* connection = wish_connection_init(core, luid, ruid);

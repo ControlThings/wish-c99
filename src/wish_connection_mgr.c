@@ -66,7 +66,17 @@ void wish_connections_check(wish_core_t* core) {
             wish_identity_destroy(&id);
             continue;
         }
-         
+        
+        
+#if 0  
+        /* Check if we should connect, meta: { outgoingFriendRequest: true } */
+        if (wish_identity_get_meta_unconfirmed_friend_request(&id) == true) {
+            WISHDEBUG(LOG_CRITICAL, "check connections, will not connect, %s is flagged as 'outgoingFriendRequest'", id.alias);
+            wish_identity_destroy(&id);
+            continue;
+        }
+#endif        
+                
         for (int cnt = 0; cnt < WISH_MAX_TRANSPORTS; cnt++) {
             int url_len = strnlen(id.transports[cnt], WISH_MAX_TRANSPORT_LEN);
             if (url_len > 0) {

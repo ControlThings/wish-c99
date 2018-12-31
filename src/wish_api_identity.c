@@ -1213,8 +1213,11 @@ void wish_api_identity_friend_request(rpc_server_req* req, const uint8_t* args) 
         strncpy(new_id.transports[0], transport, WISH_MAX_TRANSPORT_LEN);
         
         wish_save_identity_entry(&new_id);
-        /* Flag the identity somehow, eg. by adding meta "friendRequestSent: <timestamp>"
-         This flag would then be removed when a connection is established for the first time - or then it could be used for removing friend reqested contacts that have been lingering for too long */
+        /* Flag the potential friend contact as an "unconfirmed friend request", and flag it also so that the wish core will not attempt normal connections to it for the time being.
+         When the friend request connection is closed, if the the friend request is still not answered, remove the connect: false flag so that we may start attempting connections,
+         whilst waiting for the remote end to some day accept the friend request. */
+        wish_identity_add_meta_connect(core, (uint8_t*) ruid, false);
+        wish_identity_add_meta_unconfirmed_friend_request(core, (uint8_t *) ruid);
     }
     
     uint8_t buffer[WISH_PORT_RPC_BUFFER_SZ];
