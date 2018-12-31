@@ -98,7 +98,25 @@ void wish_relay_client_open(wish_core_t* core, wish_relay_client_t* relay, uint8
 }
 
 void wish_relay_client_close(wish_core_t* core, wish_relay_client_t *relay) {
-    close(relay->sockfd);
+    switch (relay->curr_state) {
+        case WISH_RELAY_CLIENT_RESOLVING:
+            /* Just cancel resolver. No need to close() socket as the it has not been allocated yet. */
+            port_dns_resolver_cancel_by_relay_client(relay);
+            break;
+        case WISH_RELAY_CLIENT_CONNECTING:
+        case WISH_RELAY_CLIENT_OPEN:
+        case WISH_RELAY_CLIENT_READ_SESSION_ID:
+        case WISH_RELAY_CLIENT_WAIT:
+            /* socket should be allocated, thus must be close()'d */
+            close(relay->sockfd);
+            break;
+        case WISH_RELAY_CLIENT_INITIAL:
+        case WISH_RELAY_CLIENT_WAIT_RECONNECT:
+        case WISH_RELAY_CLIENT_CLOSING:
+            printf("wish_relay_client_close on unexpected relay client state!\n");
+            break;
+    }
+    
     relay_ctrl_disconnect_cb(core, relay);
 }
 

@@ -218,13 +218,24 @@ int wish_open_connection(wish_core_t* core, wish_connection_t* connection, wish_
 }
 
 void wish_close_connection(wish_core_t* core, wish_connection_t* connection) {
+
+    if (connection->curr_transport_state == TRANSPORT_STATE_RESOLVING) {
+        /* There is a resolver created for this connection. No sockets are open yet. */
+        port_dns_resolver_cancel_by_wish_connection(connection);
+    }
+    else {
+        if (connection->send_arg != NULL) {
+            int sockfd = *((int *)connection->send_arg);
+            close(sockfd);
+            free(connection->send_arg);
+        }
+    }
+    
+    connection->context_state = WISH_CONTEXT_CLOSING;
+    
     /* Note that because we don't get a callback invocation when closing
      * succeeds, we need to excplicitly call TCP_DISCONNECTED so that
      * clean-up will happen */
-    connection->context_state = WISH_CONTEXT_CLOSING;
-    int sockfd = *((int *)connection->send_arg);
-    close(sockfd);
-    free(connection->send_arg);
     wish_core_signal_tcp_event(core, connection, TCP_DISCONNECTED);
 }
 
