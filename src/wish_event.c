@@ -49,7 +49,7 @@ void wish_message_processor_task(wish_core_t* core, struct wish_event *e) {
                 WISHDEBUG(LOG_CRITICAL, "Could not load the identity, handling event WISH_EVENT_NEW_CORE_CONNECTION");
             }
             else {
-                if (wish_identity_get_meta_unconfirmed_friend_request(&id)) {
+                if (wish_identity_has_meta_unconfirmed_friend_request_flag(&id)) {
                     WISHDEBUG(LOG_CRITICAL, "Removing meta: { unconfirmedFriendRequest: true } flag for a connection which we had friendRequested, but not gotten a response under the lifetime of the friend req connection.");
                     wish_identity_remove_meta_outgoing_friend_request(core, e->context->ruid);
                     /* Signal friendRequqestee Accepted */

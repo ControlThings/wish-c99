@@ -242,7 +242,7 @@ bson_iterator wish_identity_permissions(wish_identity_t* identity, const char* p
  */
 bool wish_identity_is_banned(wish_identity_t *identity);
 
-bool wish_identity_get_meta_unconfirmed_friend_request(wish_identity_t *identity);
+bool wish_identity_has_meta_unconfirmed_friend_request_flag(wish_identity_t *identity);
 
 /**
  * Returns false, if the identity should not be contacted, ie. it has meta: { connect: false }

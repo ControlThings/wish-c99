@@ -627,12 +627,12 @@ void wish_core_signal_tcp_event(wish_core_t* core, wish_connection_t* connection
                     WISHDEBUG(LOG_CRITICAL, "Could not load the identity, outgoing friend request");
                 }
                 else {
-                    if (wish_identity_get_meta_unconfirmed_friend_request(&id)) {
+                    if (wish_identity_has_meta_unconfirmed_friend_request_flag(&id)) {
                         WISHDEBUG(LOG_CRITICAL, "Removing meta: { connect: false } flag for outgoing friend request for which we have not received response yet.");
                         wish_identity_remove_meta_connect(core, connection->ruid);
                     }
-                }
-                wish_identity_destroy(&id);
+                    wish_identity_destroy(&id);
+                } 
             }
 
             if (connection->friend_req_meta) {

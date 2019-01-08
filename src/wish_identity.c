@@ -1334,7 +1334,7 @@ bool wish_identity_get_meta_connect(wish_identity_t *id) {
     return connect;
 }
 
-bool wish_identity_get_meta_unconfirmed_friend_request(wish_identity_t *id) {
+bool wish_identity_has_meta_unconfirmed_friend_request_flag(wish_identity_t *id) {
     bool friend_request = false;
     // get iterator pointing to "connect" or BSON_EOO iterator
     bson_iterator it = wish_identity_meta(id, "unconfirmedFriendRequest");
