@@ -1484,7 +1484,7 @@ void wish_identity_remove_meta_outgoing_friend_request(wish_core_t *core, uint8_
     char buf[buf_size];
     bson remove;
     bson_init_buffer(&remove, buf, buf_size);
-    bson_append_null(&remove, "outgoingFriendRequest");
+    bson_append_null(&remove, "unconfirmedFriendRequest");
     bson_finish(&remove);
     
     bson meta;
