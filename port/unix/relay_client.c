@@ -110,10 +110,12 @@ void wish_relay_client_close(wish_core_t* core, wish_relay_client_t *relay) {
             /* socket should be allocated, thus must be close()'d */
             close(relay->sockfd);
             break;
-        case WISH_RELAY_CLIENT_INITIAL:
         case WISH_RELAY_CLIENT_WAIT_RECONNECT:
+            /* Nothing to clean up */
+            break;
+        case WISH_RELAY_CLIENT_INITIAL:
         case WISH_RELAY_CLIENT_CLOSING:
-            printf("wish_relay_client_close on unexpected relay client state!\n");
+            WISHDEBUG(LOG_CRITICAL, "wish_relay_client_close on unexpected relay client state! %i", relay->curr_state);
             break;
     }
     
