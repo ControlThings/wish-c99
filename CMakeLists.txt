@@ -31,7 +31,7 @@ if(CORE_REMOTE_MANAGEMENT)
 endif(CORE_REMOTE_MANAGEMENT)
 
 if(CORE_DEBUG)
-    add_definitions("-DWISH_CORE_DEBUG") 
+    add_definitions("-DWISH_CORE_DEBUG -DWITH_GETENV") 
 endif(CORE_DEBUG)
 
 if(CORE_CLASS)
