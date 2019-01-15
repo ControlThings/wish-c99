@@ -242,6 +242,8 @@ bson_iterator wish_identity_permissions(wish_identity_t* identity, const char* p
  */
 bool wish_identity_is_banned(wish_identity_t *identity);
 
+bool wish_identity_has_meta_unconfirmed_friend_request_flag(wish_identity_t *identity);
+
 /**
  * Returns false, if the identity should not be contacted, ie. it has meta: { connect: false }
  * If property does not exist, then return true ("can be connected to").
@@ -262,3 +264,7 @@ void wish_identity_add_meta_connect(wish_core_t *core, uint8_t *uid, bool status
  * @param id
  */
 void wish_identity_remove_meta_connect(wish_core_t *core, uint8_t *uid);
+
+void wish_identity_add_meta_unconfirmed_friend_request(wish_core_t *core, uint8_t *uid);
+
+void wish_identity_remove_meta_outgoing_friend_request(wish_core_t *core, uint8_t *uid);

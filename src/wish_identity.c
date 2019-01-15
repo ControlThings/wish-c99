@@ -1314,6 +1314,9 @@ bool wish_identity_is_banned(wish_identity_t *id) {
     if (bson_iterator_type(&it) == BSON_BOOL) {
         banned = bson_iterator_bool(&it);
     }
+    else if (bson_iterator_type(&it) != BSON_EOO) {
+        WISHDEBUG(LOG_CRITICAL, "Unexpected data type for permissions 'banned'");
+    }
     return banned;
 }
 
@@ -1325,7 +1328,24 @@ bool wish_identity_get_meta_connect(wish_identity_t *id) {
     if (bson_iterator_type(&it) == BSON_BOOL) {
         connect = bson_iterator_bool(&it);
     }
+    else if (bson_iterator_type(&it) != BSON_EOO) {
+        WISHDEBUG(LOG_CRITICAL, "Unexpected data type for meta 'connect'");
+    }
     return connect;
+}
+
+bool wish_identity_has_meta_unconfirmed_friend_request_flag(wish_identity_t *id) {
+    bool friend_request = false;
+    // get iterator pointing to "connect" or BSON_EOO iterator
+    bson_iterator it = wish_identity_meta(id, "unconfirmedFriendRequest");
+
+    if (bson_iterator_type(&it) == BSON_BOOL) {
+        friend_request = bson_iterator_bool(&it);
+    }
+    else if (bson_iterator_type(&it) != BSON_EOO) {
+        WISHDEBUG(LOG_CRITICAL, "Unexpected data type for meta 'outgoingFriendRequest'");
+    }
+    return friend_request;
 }
 
 void wish_identity_add_meta_connect(wish_core_t *core, uint8_t *uid, bool status) {
@@ -1383,6 +1403,88 @@ void wish_identity_remove_meta_connect(wish_core_t *core, uint8_t *uid) {
     bson remove;
     bson_init_buffer(&remove, buf, buf_size);
     bson_append_null(&remove, "connect");
+    bson_finish(&remove);
+    
+    bson meta;
+    bool meta_created = false;
+    if (id.meta) {
+        bson_init_with_data(&meta, id.meta);
+    } else {
+        bson_init(&meta);
+        bson_finish(&meta);
+        meta_created = true;
+    }
+    
+    bson_update(&meta, &remove);
+    
+    id.meta = bson_data(&meta);
+    
+    int ret = wish_identity_update(core, &id);
+
+    if (meta_created) {
+        bson_destroy(&meta);
+        // set meta to NULL or the identity_destroy will try to free it
+        id.meta = NULL;
+    }
+    
+    wish_identity_destroy(&id);
+}
+
+void wish_identity_add_meta_unconfirmed_friend_request(wish_core_t *core, uint8_t *uid) {
+    //WISHDEBUG(LOG_CRITICAL, "Add meta connect");
+    wish_identity_t id;
+    if ( wish_identity_load(uid, &id) != RET_SUCCESS ) {
+        WISHDEBUG(LOG_CRITICAL, "ERROR: could not load add meta connect");
+        wish_identity_destroy(&id);
+        return;
+    }
+    
+    const size_t buf_size = 100;
+    char buf[buf_size];
+    bson append;
+    bson_init_buffer(&append, buf, buf_size);
+    bson_append_bool(&append, "unconfirmedFriendRequest", true);
+    bson_finish(&append);
+    
+    bson meta;
+    bool meta_created = false;
+    if (id.meta) {
+        bson_init_with_data(&meta, id.meta);
+    } else {
+        bson_init(&meta);
+        bson_finish(&meta);
+        meta_created = true;
+    }
+    
+    bson_update(&meta, &append);
+    
+    id.meta = bson_data(&meta);
+    
+    int ret = wish_identity_update(core, &id);
+
+    if (meta_created) {
+        bson_destroy(&meta);
+        // set meta to NULL or the identity_destroy will try to free it
+        id.meta = NULL;
+    }
+    
+    wish_identity_destroy(&id);
+}
+
+void wish_identity_remove_meta_outgoing_friend_request(wish_core_t *core, uint8_t *uid) {
+        //WISHDEBUG(LOG_CRITICAL, "remove meta connect");
+    wish_identity_t id;
+    if ( wish_identity_load(uid, &id) != RET_SUCCESS ) {
+        WISHDEBUG(LOG_CRITICAL, "ERROR: could not load 2");
+        wish_identity_destroy(&id);
+        return;
+    }
+    
+    const size_t buf_size = 100;
+    char buf[buf_size];
+    bson remove;
+    bson_init_buffer(&remove, buf, buf_size);
+    bson_append_null(&remove, "unconfirmedFriendRequest");
     bson_finish(&remove);
     
     bson meta;

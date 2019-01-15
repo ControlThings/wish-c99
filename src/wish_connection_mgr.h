@@ -24,6 +24,12 @@
 /** Timeout of connection in making */
 #define CONNECTION_SETUP_TIMEOUT PING_TIMEOUT
 
+#define CONNECTION_DNS_RESOLVE_TIMEOUT 20
+
+#if CONNECTION_DNS_RESOLVE_TIMEOUT > CONNECTION_SETUP_TIMEOUT
+#error DNS resolve timeout cannot be longer than connection setup timeout
+#endif
+
 /** Timeout of a friend request connection */
 #define FRIEND_REQ_TIMEOUT 300 /* Seconds */
 

@@ -545,10 +545,10 @@ static void core_friend_req(rpc_server_req* req, const uint8_t* args) {
      * contacts */
     //memcpy(ctx->pending_friend_req_id, friend_req_id, SIZEOF_ID)
 
-    /* Save the recipient UID of the friend request as luid for the
-     * context. This information will be used later when exporting
+    /* The recipient UID of the friend request (luid of the
+     * context) is already initialised, just copy ruid. This information will be used later when exporting
      * the cert */
-    memcpy(connection->luid, recepient_uid, WISH_ID_LEN);
+   
     memcpy(connection->ruid, new_id->uid, WISH_ID_LEN);
 
     //WISHDEBUG(LOG_CRITICAL, "Friend request to luid: %02x %02x %02x %02x", connection->luid[0], connection->luid[1], connection->luid[2], connection->luid[3]);
@@ -567,24 +567,80 @@ static void core_friend_req(rpc_server_req* req, const uint8_t* args) {
     wish_core_signals_emit(core, &bs);
 }
 
+/**
+ * Callback function for the core-to-core RPC friend request. 
+ * This callback is invoked when the friend on the remote core accepts or 
+ * declines the friend request, and the remote core has sent us the result; 
+ * either an RPC 'ack' packet with new friend's certificate, or an RPC 'err' 
+ * in case the friend request was declined.
+ * 
+ * When friend request is accepted, a payload to callback looks like this:
+ * 
+ * data: {
+ *      data: Buffer(0x6b 00 00 00 ...)
+ *      meta: Buffer(0x38 00 00 00 ...)
+ *      signatures: [
+ *          0: {
+ *              uid: Buffer(0x33 1d 0c a6 ...)
+ *              sign: Buffer(0xc9 78 a7 0b ...)
+ *      ack: 4
+ * 
+ * When friend request is declined, the payload is this:
+ * 
+ * data: {
+ *     code: 123
+ *     msg: 'Declining friend request.'
+ * err: 1
+ */
 static void friend_req_callback(rpc_client_req* req, void* context, const uint8_t* payload, size_t payload_len) {
     wish_core_t *core = req->client->context;
     
-    //bson_visit("Friend req callback, payload: ", payload);
-    /*
-    data: {
-        data: Buffer(0x6b 00 00 00 ...)
-        meta: Buffer(0x38 00 00 00 ...)
-        signatures: [
-            0: {
-                uid: Buffer(0x33 1d 0c a6 ...)
-                sign: Buffer(0xc9 78 a7 0b ...)
-    ack: 4
-    */
-    
+    bson_visit("Friend req callback (requestor's side), payload: ", payload);
+
     bson_iterator data_it;
     bson_iterator_from_buffer(&data_it, payload);
-    bson_type type = bson_find_fieldpath_value("data.data", &data_it);
+    
+    /* First check if the request resulted in error */
+    bson_type type = bson_find_fieldpath_value("err", &data_it);
+    if ( type == BSON_INT ) {
+        /* The result is an error! */
+        bson_iterator_from_buffer(&data_it, payload);
+        
+        if (bson_find_fieldpath_value("data.code", &data_it) == BSON_INT) {
+            int err_code = bson_iterator_int(&data_it);
+            
+            if (err_code == 123) { //TODO: define RPC error codes
+                /* Friend request was denied. Remove the friend contact from local database, because we were explicitly declined friend request! */
+                
+                wish_connection_t *connection = (wish_connection_t *)context;
+                WISHDEBUG(LOG_CRITICAL, "Removing the identity uid %02x %02x %02x... because friend request was denied.", connection->ruid[0], connection->ruid[1], connection->ruid[2], connection->ruid[3]);
+                //Before removing, check that friend has flag: unconfirmedFriendRequest?
+                wish_identity_remove(connection->core, connection->ruid);
+                //Emit "identity"?
+                wish_core_signals_emit_string(core, "identity");
+                //Emit "friendRequesteeDeclined"?
+                wish_core_signals_emit_string(core, "friendRequesteeDenied");
+                return;
+            }
+            else {
+                WISHDEBUG(LOG_CRITICAL, "Unknown rpc error code %i", err_code);
+                return;
+            }
+        }
+        else {
+            WISHDEBUG(LOG_CRITICAL, "Error. Reply had 'err', but no 'data.code'.");
+            return;
+        }
+    }
+    else if ( type != BSON_EOO) {
+        WISHDEBUG(LOG_CRITICAL, "Not rpc error, but an error anyway, since 'err' was of unexpected type %i.", type );
+        return;
+    }
+    
+    /* When we get this far, we know that the request reply was not an rpc error */
+    
+    bson_iterator_from_buffer(&data_it, payload);
+    type = bson_find_fieldpath_value("data.data", &data_it);
     if ( type != BSON_BINDATA ) {
         WISHDEBUG(LOG_CRITICAL, "Could not import friend cert, data.data not BSON_BINDATA, is type %i", type );
         return;
@@ -599,15 +655,28 @@ static void friend_req_callback(rpc_client_req* req, void* context, const uint8_
     pubkey: Buffer(0x03 7c 37 a7 ...)
     */
          
-    /* FIXME TODO: verify cert signatures */
+#warning FIXME TODO: verify cert signatures 
       
-    wish_identity_t new_friend_id;
-    memset(&new_friend_id, 0, sizeof (wish_identity_t));
+    wish_identity_t new_friend_id_from_cert;
+    memset(&new_friend_id_from_cert, 0, sizeof (wish_identity_t));
 
     bson b;
     bson_init_with_data(&b, cert_data);
     
-    wish_identity_from_bson(&new_friend_id, &b);
+    wish_identity_from_bson(&new_friend_id_from_cert, &b);
+    
+    /* We have now received a 'friend certificate' signed by the remote party, and the data is saved into struct new_friend_id_from_cert. 
+     * Check that 
+     * - the cert actually contains the same identity, as we had 'friend requested'. This means that pubkeys must match, when we get identity from our local id using the uid.
+     * - that the cert is signed by the friend requestee identity, and optionally by somebody else
+     */
+    
+    wish_identity_t new_friend_id_from_local_db;
+    memset(&new_friend_id_from_local_db, 0, sizeof (wish_identity_t));
+    
+    // TODO: load from local database using uid, and verify that pubkeys match
+    
+    // TODO: Verify that signature is by the new friend identity
     
     /* Get the meta part from data; reset iterator */
     bson_iterator_from_buffer(&data_it, payload);
@@ -622,7 +691,7 @@ static void friend_req_callback(rpc_client_req* req, void* context, const uint8_
     /* Add the friend request metadata to the internal identity structure */
     bson meta_bson;
     bson_init_with_data(&meta_bson, meta_data);
-    wish_identity_add_meta_from_bson(&new_friend_id, &meta_bson);
+    wish_identity_add_meta_from_bson(&new_friend_id_from_cert, &meta_bson);
     
     // Check if identity is already in db
 
@@ -634,7 +703,7 @@ static void friend_req_callback(rpc_client_req* req, void* context, const uint8_
     bool found = false;
     int i = 0;
     for (i = 0; i < num_uids; i++) {
-        if ( memcmp(&uid_list[i].uid, new_friend_id.uid, WISH_ID_LEN) == 0 ) {
+        if ( memcmp(&uid_list[i].uid, new_friend_id_from_cert.uid, WISH_ID_LEN) == 0 ) {
             WISHDEBUG(LOG_CRITICAL, "New friend identity already in DB, we wont add it multiple times.");
             found = true;
             break;
@@ -642,9 +711,12 @@ static void friend_req_callback(rpc_client_req* req, void* context, const uint8_
     }
 
     if(!found) {
-        wish_save_identity_entry(&new_friend_id);
+        wish_save_identity_entry(&new_friend_id_from_cert);
         wish_core_signals_emit_string(core, "identity");
     }
+    
+    wish_identity_remove_meta_outgoing_friend_request(core, new_friend_id_from_cert.uid);
+    wish_identity_remove_meta_connect(core, new_friend_id_from_cert.uid);
     
     /* emit friendRequesteeAccepted even if it was an identity which already existed */
     wish_core_signals_emit_string(core, "friendRequesteeAccepted");

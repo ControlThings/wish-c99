@@ -240,6 +240,24 @@ void wish_api_wld_friend_request(rpc_server_req* req, const uint8_t* args) {
         rpc_server_error_msg(req, 304, "Wld entry not found.");
         return;
     }
+    
+    // We have the friendrequestee's alias, ruid, pubkey and transports. We can now add the friend requestee to our contacts
+    if (wish_identity_exists((uint8_t*) db[i].ruid) == 0) {
+        /* Identity does not exist in our database */
+        wish_identity_t new_id = { 0 };
+        new_id.has_privkey = false;
+        memcpy(new_id.uid, db[i].ruid, WISH_ID_LEN);
+        strncpy(new_id.alias, db[i].alias, WISH_ALIAS_LEN);
+        memcpy(new_id.pubkey, db[i].pubkey, WISH_PUBKEY_LEN);
+        wish_platform_snprintf(new_id.transports[0], WISH_MAX_TRANSPORT_LEN, "%d.%d.%d.%d:%d", db[i].transport_ip.addr[0], db[i].transport_ip.addr[1], db[i].transport_ip.addr[2], db[i].transport_ip.addr[3], db[i].transport_port);        
+        wish_save_identity_entry(&new_id);
+        /* Flag the potential friend contact as an "unconfirmed friend request", and flag it also so that the wish core will not attempt normal connections to it for the time being.
+         When the friend request connection is closed, if the the friend request is still not answered, remove the connect: false flag so that we may start attempting connections,
+         whilst waiting for the remote end to some day accept the friend request. */
+        wish_identity_add_meta_connect(core, (uint8_t*) db[i].ruid, false);
+        wish_identity_add_meta_unconfirmed_friend_request(core, db[i].ruid);
+
+    }
 
     wish_connection_t* connection = wish_connection_init(core, luid, ruid);
     connection->friend_req_connection = true;
