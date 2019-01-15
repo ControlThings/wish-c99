@@ -594,8 +594,9 @@ static void core_friend_req(rpc_server_req* req, const uint8_t* args) {
  */
 static void friend_req_callback(rpc_client_req* req, void* context, const uint8_t* payload, size_t payload_len) {
     wish_core_t *core = req->client->context;
+    wish_connection_t *connection = (wish_connection_t *)context;
     
-    bson_visit("Friend req callback (requestor's side), payload: ", payload);
+    //bson_visit("Friend req callback (requestor's side), payload: ", payload);
 
     bson_iterator data_it;
     bson_iterator_from_buffer(&data_it, payload);
@@ -612,7 +613,6 @@ static void friend_req_callback(rpc_client_req* req, void* context, const uint8_
             if (err_code == 123) { //TODO: define RPC error codes
                 /* Friend request was denied. Remove the friend contact from local database, because we were explicitly declined friend request! */
                 
-                wish_connection_t *connection = (wish_connection_t *)context;
                 WISHDEBUG(LOG_CRITICAL, "Removing the identity uid %02x %02x %02x... because friend request was denied.", connection->ruid[0], connection->ruid[1], connection->ruid[2], connection->ruid[3]);
                 //Before removing, check that friend has flag: unconfirmedFriendRequest?
                 wish_identity_remove(connection->core, connection->ruid);
@@ -647,6 +647,18 @@ static void friend_req_callback(rpc_client_req* req, void* context, const uint8_
     }
     
     uint8_t *cert_data = (uint8_t *) bson_iterator_bin_data(&data_it);
+    const int cert_data_len = bson_iterator_bin_len(&data_it);
+        
+    /* Get the meta part from data; reset iterator */
+    bson_iterator_from_buffer(&data_it, payload);
+    type = bson_find_fieldpath_value("data.meta", &data_it);
+    if ( type != BSON_BINDATA ) {
+        WISHDEBUG(LOG_CRITICAL, "Could not import friend metadata, data.meta not BSON_BINDATA, is type %i", type );
+        return;
+    }
+
+    uint8_t *meta_data = (uint8_t *) bson_iterator_bin_data(&data_it);
+    const int meta_data_len = bson_iterator_bin_len(&data_it);
     
     //bson_visit("Friend req callback, cert data: ", cert_data);
     /*    
@@ -654,9 +666,7 @@ static void friend_req_callback(rpc_client_req* req, void* context, const uint8_
     uid: Buffer(0x33 1d 0c a6 ...)
     pubkey: Buffer(0x03 7c 37 a7 ...)
     */
-         
-#warning FIXME TODO: verify cert signatures 
-      
+
     wish_identity_t new_friend_id_from_cert;
     memset(&new_friend_id_from_cert, 0, sizeof (wish_identity_t));
 
@@ -671,22 +681,85 @@ static void friend_req_callback(rpc_client_req* req, void* context, const uint8_
      * - that the cert is signed by the friend requestee identity, and optionally by somebody else
      */
     
+    /* Load the requested identity from local database using uid, and verify that pubkeys match. 
+     * Remember that we already saved the identity to our contacts, when we sent the friend request. */
     wish_identity_t new_friend_id_from_local_db;
     memset(&new_friend_id_from_local_db, 0, sizeof (wish_identity_t));
     
-    // TODO: load from local database using uid, and verify that pubkeys match
+    wish_identity_load(connection->ruid, &new_friend_id_from_local_db);
     
-    // TODO: Verify that signature is by the new friend identity
-    
-    /* Get the meta part from data; reset iterator */
-    bson_iterator_from_buffer(&data_it, payload);
-    type = bson_find_fieldpath_value("data.meta", &data_it);
-    if ( type != BSON_BINDATA ) {
-        WISHDEBUG(LOG_CRITICAL, "Could not import friend metadata, data.meta not BSON_BINDATA, is type %i", type );
+    if (memcmp(new_friend_id_from_local_db.pubkey, new_friend_id_from_cert.pubkey, WISH_PUBKEY_LEN) != 0) {
+        WISHDEBUG(LOG_CRITICAL, "Pubkey from cert sent by friend requestee does not match friend requested id!");
+        wish_identity_destroy(&new_friend_id_from_local_db);
         return;
     }
-    
-    uint8_t *meta_data = (uint8_t *) bson_iterator_bin_data(&data_it);
+   
+#if 0 //Check of the signatures, non-working implementation 
+    // Verify that signature is by the new friend identity
+    bool signed_by_new_friend = false;
+    for (int i = 0; i < 10; i++) {
+        const int path_max_len = 32;
+        char path[path_max_len]; //strings like data.signatures.0.sign or data.signatures.0.uid
+        
+        bson_iterator sign_it;
+        bson_iterator_from_buffer(&sign_it, payload);
+        wish_platform_snprintf(path, path_max_len, "data.signatures.%d.uid", i);
+        bson_type sign_type = bson_find_fieldpath_value(path, &sign_it);
+        
+        if ( sign_type != BSON_BINDATA ) {
+            //end of signatures
+            WISHDEBUG(LOG_CRITICAL, "end of sig, %s", path);
+            break;
+        }
+        
+        const char *sign_uid = bson_iterator_bin_data(&sign_it);
+        
+        if (memcmp(sign_uid, connection->ruid, WISH_ID_LEN) == 0) {
+            bson_iterator_from_buffer(&sign_it, payload);
+            wish_platform_snprintf(path, path_max_len, "data.signatures.%d.sign", i);
+            bson_type sign_type = bson_find_fieldpath_value(path, &sign_it);
+        
+            if ( sign_type != BSON_BINDATA ) {
+                WISHDEBUG(LOG_CRITICAL, "data.signatures.%d.uid existed, but data.signatures.%d.sign does not exist!", i, i);
+                break;
+            }
+        
+            if ( bson_iterator_bin_len(&sign_it) != WISH_SIGNATURE_LEN ) {
+                WISHDEBUG(LOG_CRITICAL, "Bad signature length");
+                break;
+            }
+            
+            const char* signature = bson_iterator_bin_data(&sign_it);
+            
+            bson data_meta_check_b;
+            bson_init(&data_meta_check_b);
+            bson_append_binary(&data_meta_check_b, "data", cert_data, cert_data_len);
+            bson_append_binary(&data_meta_check_b, "meta", meta_data, meta_data_len);
+            bson_finish(&data_meta_check_b);
+   
+            bson_visit("to check: ", bson_data(&data_meta_check_b));
+               
+            const bin data_bin = { .base = (char *)bson_data(&data_meta_check_b), .len = bson_size(&data_meta_check_b) };
+            const bin signature_bin = { .base = (char *) signature, .len = WISH_SIGNATURE_LEN };
+            return_t sig_check = wish_identity_verify(core, &new_friend_id_from_local_db, &data_bin, NULL, &signature_bin); 
+            if (sig_check == RET_SUCCESS) {
+                WISHDEBUG(LOG_CRITICAL, "Found friend cert OK signature");
+            }
+            else if (sig_check == RET_E_INVALID_INPUT) {
+                WISHDEBUG(LOG_CRITICAL, "Found friend cert fails signature check, invalid input");
+            }
+            else {
+                WISHDEBUG(LOG_CRITICAL, "Found friend cert invalid signature, check fails", sig_check);
+            }
+            bson_destroy(&data_meta_check_b);
+            
+        }
+        else {
+            WISHDEBUG(LOG_CRITICAL, "Found friend cert signed by somebody else! Checking such signatures is not implemented!");
+            //TODO: check signature
+        }
+    }
+#endif
     
     /* Add the friend request metadata to the internal identity structure */
     bson meta_bson;
@@ -706,6 +779,9 @@ static void friend_req_callback(rpc_client_req* req, void* context, const uint8_
         if ( memcmp(&uid_list[i].uid, new_friend_id_from_cert.uid, WISH_ID_LEN) == 0 ) {
             WISHDEBUG(LOG_CRITICAL, "New friend identity already in DB, we wont add it multiple times.");
             found = true;
+            
+            // TODO: Update alias, meta... based on cert that friend requestee sent
+            
             break;
         }
     }
@@ -720,7 +796,7 @@ static void friend_req_callback(rpc_client_req* req, void* context, const uint8_
     
     /* emit friendRequesteeAccepted even if it was an identity which already existed */
     wish_core_signals_emit_string(core, "friendRequesteeAccepted");
-    wish_connection_t* connection = context;
+
     wish_close_connection(core, connection);
 }
 

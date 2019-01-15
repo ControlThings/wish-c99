@@ -1051,13 +1051,13 @@ return_t wish_identity_sign(wish_core_t* core, wish_identity_t* uid, const bin* 
 }
 
 /**
- * Creates signature for data and if claim is present signature covers claim
+ * Verify signature for data and if claim is present also check signature covers claim
  * 
  * @param core
  * @param uid Input
  * @param data Input
  * @param claim Input
- * @param signature Output
+ * @param signature Input
  * @return 
  */
 return_t wish_identity_verify(wish_core_t* core, wish_identity_t* uid, const bin* data, const bin* claim, const bin* signature) {
