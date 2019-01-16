@@ -1,5 +1,5 @@
 cd ..;
-VERSION=`git describe`;
+VERSION=`git describe --tags --dirty`;
 if [ -z "$VERSION" ]; then
 VERSION=`cat VERSION`
 fi
