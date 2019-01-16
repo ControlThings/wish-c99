@@ -20,6 +20,8 @@ This is a C-language implementation based on the Wish (wish-core) reference impl
 ## Build
 
 ```sh
+git submodule init
+git submodule update
 mkdir build
 cd build 
 cmake ..
