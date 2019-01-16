@@ -21,6 +21,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <netinet/in.h>
 #include <netdb.h> 
 #include <time.h>
@@ -239,7 +240,7 @@ void wish_close_connection(wish_core_t* core, wish_connection_t* connection) {
     wish_core_signal_tcp_event(core, connection, TCP_DISCONNECTED);
 }
 
-char usage_str[] = "Wish Core " WISH_CORE_VERSION_STRING
+static char usage_str[] = "Wish Core " WISH_CORE_VERSION_STRING
 "\n\n  Usage: %s [options]\n\
     -b don't broadcast own uid over local discovery\n\
     -l don't listen to local discovery broadcasts\n\
@@ -249,7 +250,9 @@ char usage_str[] = "Wish Core " WISH_CORE_VERSION_STRING
     -p <port> listen for incoming connections at this TCP port\n\
     -r connect to a relay server, for accepting incoming connections via the relay.\n\
 \n\
-    -a <port> start \"App TCP\" interface server at port\n";
+    -a <port> start \"App TCP\" interface server at port\n\
+\n\
+    -d Use current working directory for database files; default is to use $HOME/.wish-c99";
 
 static void print_usage(char *executable_name) {
     printf(usage_str, executable_name);
@@ -284,12 +287,14 @@ extern int app_fds[];
 extern enum app_state app_states[];
 #endif
 
+/** If this is set to true, the core's working dir is kept at current working directory. */
+static bool override_core_wd = false;
 
 /* Process the command line options. The function will set global
  * variables accordingly */
 static void process_cmdline_opts(int argc, char** argv) {
     int opt = 0;
-    while ((opt = getopt(argc, argv, "hbilc:C:R:sSp:ra:")) != -1) {
+    while ((opt = getopt(argc, argv, "hbilc:C:R:sSp:ra:d")) != -1) {
         switch (opt) {
         case 'b':
             printf("Will not do wld broadcast!\n");
@@ -329,6 +334,11 @@ static void process_cmdline_opts(int argc, char** argv) {
             printf("App tcp server not included in build!\n");
             abort();
 #endif
+            break;
+        case 'd':
+            /* Allows saving the identity database and other files to working directory instead of global place */
+            override_core_wd = true;
+            
             break;
         default:
             print_usage(argv[0]);
@@ -520,6 +530,32 @@ static int seed_random_init() {
     return 0;
 }
 
+/** 
+ * Set the directory for data files of the wish core
+ * Data files are (among others) the identity database and wish core's config file named wish.conf
+ */
+static void set_core_working_dir(char *path) {
+    /* For now, this sets the current working dir of the process */
+    
+    struct stat st = {0};
+
+    if (stat(path, &st) == -1) {
+        int mkdir_ret = mkdir(path, 0700);
+        if (mkdir_ret == -1) {
+            perror("When mkdir'ing core working dir");
+            abort();
+        }
+    }
+    int ret = chdir(path);
+    if (ret == -1) {
+        printf("Error while setting core working dir to %s, result: %s\n", path, strerror(errno));
+        abort();
+    }
+    else {
+        printf("Using directory %s for identity and contact database\n", path);
+    }
+}
+
 #define IO_BUF_LEN 1000
 
 int main(int argc, char** argv) {
@@ -557,6 +593,24 @@ int main(int argc, char** argv) {
         as_app_server = true;
         skip_connection_acl = false;
     }
+    
+    size_t core_wd_max_len = 1024;
+    char core_wd[core_wd_max_len];
+    if (!override_core_wd) {
+        snprintf(core_wd, core_wd_max_len, "%s/.wish-c99", getenv("HOME"));
+        set_core_working_dir(core_wd);
+    }
+    else {
+        char *cwd = getcwd(core_wd, core_wd_max_len);
+        if (cwd == NULL) {
+            perror("When calling getcwd");
+            abort();
+        }
+        else {
+            printf("Using %s for identity and contact database\n", core_wd);
+        }
+    }
+        
 
     /* Initialize Wish core (RPC servers) */
     wish_core_init(core);
