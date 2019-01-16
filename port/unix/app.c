@@ -598,7 +598,7 @@ static void set_core_working_dir(char *path) {
     if (_stat(path, &st) == -1) {
         int mkdir_ret = mkdir(path);
         if (mkdir_ret == -1) {
-            perror("When mkdir'ing core working dir");
+            perror("When mkdir'ing core data dir");
             abort();
         }
     }
@@ -608,18 +608,18 @@ static void set_core_working_dir(char *path) {
     if (stat(path, &st) == -1) {
         int mkdir_ret = mkdir(path, 0700);
         if (mkdir_ret == -1) {
-            perror("When mkdir'ing core working dir");
+            perror("When mkdir'ing core data dir");
             abort();
         }
     }
 #endif
     int ret = chdir(path);
     if (ret == -1) {
-        printf("Error while setting core working dir to %s, result: %s\n", path, strerror(errno));
+        printf("Error while setting core data dir to %s, result: %s\n", path, strerror(errno));
         abort();
     }
     else {
-        printf("Using directory %s for identity and contact database\n", path);
+        printf("Core data dir is %s\n", path);
     }
 }
 
