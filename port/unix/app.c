@@ -20,12 +20,20 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <wincrypt.h>
+#include "helper.h"
+
+#else
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <netinet/in.h>
 #include <netdb.h> 
-#include <time.h>
 #include <arpa/inet.h>
+#endif
+#include <time.h>
 #include <fcntl.h>
 #include <errno.h>
 #include "utlist.h"
@@ -52,6 +60,12 @@
 
 #ifdef WITH_APP_TCP_SERVER
 #include "app_server.h"
+#endif
+
+#ifdef _WIN32
+typedef char socket_opt_t;
+#else
+typedef int socket_opt_t;
 #endif
 
 wish_core_t core_inst;
@@ -84,12 +98,20 @@ int write_to_socket(wish_connection_t* connection, unsigned char* buffer, int le
 #define LOCAL_DISCOVERY_UDP_PORT 9090
 
 void socket_set_nonblocking(int sockfd) {
+#ifdef _WIN32
+    unsigned long value = 1;
+    if (ioctlsocket(sockfd, FIONBIO, &value) == SOCKET_ERROR) {
+        perror("When setting socket to non-blocking mode");
+        exit(1);
+    }
+#else
     int status = fcntl(sockfd, F_SETFL, fcntl(sockfd, F_GETFL, 0) | O_NONBLOCK);
 
     if (status == -1){
         perror("When setting socket to non-blocking mode");
         abort();
     }
+#endif
 }
 
 
@@ -368,7 +390,7 @@ void setup_wish_local_discovery(void) {
     /* Set socketoption REUSEADDR on the UDP local discovery socket so
      * that we can have several programs listening on the one and same
      * local discovery port 9090 */
-    int option = 1;
+    const socket_opt_t option = 1;
     setsockopt(wld_fd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
 #ifdef __APPLE__
     setsockopt(wld_fd, SOL_SOCKET, SO_REUSEPORT, &option, sizeof(option));
@@ -434,8 +456,8 @@ int wish_send_advertizement(wish_core_t* core, uint8_t *ad_msg, size_t ad_len) {
         perror("Could not create socket for broadcasting");
         abort();
     }
-
-    int broadcast = 1;
+    
+    const socket_opt_t broadcast = 1;
     if (setsockopt(s, SOL_SOCKET, SO_BROADCAST, 
             &broadcast, sizeof(broadcast))) {
         error("set sock opt");
@@ -486,7 +508,8 @@ void setup_wish_server(wish_core_t* core) {
         perror("server socket creation");
         abort();
     }
-    int option = 1;
+    
+    const socket_opt_t option = 1;
     setsockopt(serverfd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
     socket_set_nonblocking(serverfd);
 
@@ -509,6 +532,36 @@ void setup_wish_server(wish_core_t* core) {
 
 
 
+#ifdef _WIN32
+HCRYPTPROV crypt_prov;
+static int seed_random_init() {
+    
+    if (CryptAcquireContext(&crypt_prov, NULL, NULL, PROV_RSA_FULL, 0) != TRUE) {
+        printf("Failed creating crypt cointainer (error=0x%lx), this is dangerous, bailing out.\n", GetLastError());
+        exit(1);
+    }
+    
+    return 0;
+}
+
+#if 0
+static void seed_random_deinit() {
+    CryptReleaseContext(crypt_prov, 0);
+}
+#endif
+
+static long int random(void) {
+    unsigned int randval;
+
+    BOOL success = CryptGenRandom(crypt_prov, sizeof(randval), (BYTE *) &randval);
+    if (!success) {
+        printf("Failed generating random number, this is dangerous, bailing out.\n");
+        exit(1);
+    }
+    return randval;
+}
+
+#else
 static int seed_random_init() {
     unsigned int randval;
     
@@ -529,6 +582,7 @@ static int seed_random_init() {
     
     return 0;
 }
+#endif
 
 /** 
  * Set the directory for data files of the wish core
@@ -559,6 +613,13 @@ static void set_core_working_dir(char *path) {
 #define IO_BUF_LEN 1000
 
 int main(int argc, char** argv) {
+#ifdef __WIN32__
+   WORD versionWanted = MAKEWORD(1, 1);
+   WSADATA wsaData;
+   WSAStartup(versionWanted, &wsaData);
+#endif
+    
+    
     wish_platform_set_malloc(malloc);
     wish_platform_set_realloc(realloc);
     wish_platform_set_free(free);
@@ -719,7 +780,7 @@ int main(int argc, char** argv) {
                 
                     /* Note: Before select() we added fd to be checked for writability, if the relay fd was in this state. Now we need to check writability under the same condition */
                     if (port_select_fd_is_writable(relay->sockfd) && relay->curr_state ==  WISH_RELAY_CLIENT_CONNECTING) {
-                        int connect_error = 0;
+                        socket_opt_t connect_error = 0;
                         socklen_t connect_error_len = sizeof(connect_error);
                         if (getsockopt(relay->sockfd, SOL_SOCKET, SO_ERROR, 
                                 &connect_error, &connect_error_len) == -1) {
@@ -882,7 +943,7 @@ int main(int argc, char** argv) {
                      * means that a previous connect succeeded. (because
                      * normally we don't select for socket writability!)
                      * */
-                    int connect_error = 0;
+                    socket_opt_t connect_error = 0;
                     socklen_t connect_error_len = sizeof(connect_error);
                     if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, 
                             &connect_error, &connect_error_len) == -1) {

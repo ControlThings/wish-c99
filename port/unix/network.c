@@ -22,15 +22,22 @@
 #include<stdio.h> //printf
 #include<string.h>    //memset
 #include<errno.h> //errno
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include "helper.h"
+#else
 #include<sys/socket.h>
 #include<netdb.h>
 #include<ifaddrs.h>
+#endif
+
+
 #include<stdlib.h>
 #include<unistd.h>
  
 #include "wish_connection.h"
 #include "wish_connection_mgr.h"
-
 
 /*
  * Find local ip used as source ip in ip packets.
@@ -38,7 +45,9 @@
  */
 static void find_local_ip_default_route(char *addr_buffer, 
         size_t addr_buffer_len) {
-#ifndef __APPLE__    
+#if defined(__APPLE__) || defined(_WIN32)
+    
+#else
     FILE *f;
     char line[100] , *p=NULL , *c;
      
