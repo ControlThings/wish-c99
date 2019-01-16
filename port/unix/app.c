@@ -20,15 +20,14 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <wincrypt.h>
 #include "helper.h"
-
 #else
 #include <sys/socket.h>
-#include <sys/stat.h>
 #include <netinet/in.h>
 #include <netdb.h> 
 #include <arpa/inet.h>
@@ -591,6 +590,17 @@ static int seed_random_init() {
 static void set_core_working_dir(char *path) {
     /* For now, this sets the current working dir of the process */
     
+#ifdef _WIN32
+    struct _stat st = {0};
+
+    if (_stat(path, &st) == -1) {
+        int mkdir_ret = mkdir(path);
+        if (mkdir_ret == -1) {
+            perror("When mkdir'ing core working dir");
+            abort();
+        }
+    }
+#else
     struct stat st = {0};
 
     if (stat(path, &st) == -1) {
@@ -600,6 +610,7 @@ static void set_core_working_dir(char *path) {
             abort();
         }
     }
+#endif
     int ret = chdir(path);
     if (ret == -1) {
         printf("Error while setting core working dir to %s, result: %s\n", path, strerror(errno));
@@ -658,7 +669,11 @@ int main(int argc, char** argv) {
     size_t core_wd_max_len = 1024;
     char core_wd[core_wd_max_len];
     if (!override_core_wd) {
+#ifdef _WIN32
+        snprintf(core_wd, core_wd_max_len, "%s\\wish-c99", getenv("USERPROFILE"));
+#else
         snprintf(core_wd, core_wd_max_len, "%s/.wish-c99", getenv("HOME"));
+#endif
         set_core_working_dir(core_wd);
     }
     else {
