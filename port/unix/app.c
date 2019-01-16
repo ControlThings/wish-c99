@@ -261,6 +261,9 @@ void wish_close_connection(wish_core_t* core, wish_connection_t* connection) {
     wish_core_signal_tcp_event(core, connection, TCP_DISCONNECTED);
 }
 
+/** This defines the default data directory name (under home dir) for the core*/
+#define CORE_DEFAULT_DIR ".wish"
+
 static char usage_str[] = "Wish Core " WISH_CORE_VERSION_STRING
 "\n\n  Usage: %s [options]\n\
     -b don't broadcast own uid over local discovery\n\
@@ -273,7 +276,7 @@ static char usage_str[] = "Wish Core " WISH_CORE_VERSION_STRING
 \n\
     -a <port> start \"App TCP\" interface server at port\n\
 \n\
-    -d Use current working directory for database files; default is to use $HOME/.wish-c99";
+    -d Use current working directory for database files; default is to use $HOME/" CORE_DEFAULT_DIR "\n";
 
 static void print_usage(char *executable_name) {
     printf(usage_str, executable_name);
@@ -307,6 +310,7 @@ extern int app_serverfd; /* Defined in app_server.c */
 extern int app_fds[];
 extern enum app_state app_states[];
 #endif
+
 
 /** If this is set to true, the core's working dir is kept at current working directory. */
 static bool override_core_wd = false;
@@ -385,7 +389,6 @@ void setup_wish_local_discovery(void) {
         error("udp socket");
     }
 
-#if 1
     /* Set socketoption REUSEADDR on the UDP local discovery socket so
      * that we can have several programs listening on the one and same
      * local discovery port 9090 */
@@ -393,7 +396,6 @@ void setup_wish_local_discovery(void) {
     setsockopt(wld_fd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
 #ifdef __APPLE__
     setsockopt(wld_fd, SOL_SOCKET, SO_REUSEPORT, &option, sizeof(option));
-#endif
 #endif
 
     socket_set_nonblocking(wld_fd);
@@ -670,9 +672,9 @@ int main(int argc, char** argv) {
     char core_wd[core_wd_max_len];
     if (!override_core_wd) {
 #ifdef _WIN32
-        snprintf(core_wd, core_wd_max_len, "%s\\wish-c99", getenv("USERPROFILE"));
+        snprintf(core_wd, core_wd_max_len, "%s\\" CORE_DEFAULT_DIR, getenv("USERPROFILE"));
 #else
-        snprintf(core_wd, core_wd_max_len, "%s/.wish-c99", getenv("HOME"));
+        snprintf(core_wd, core_wd_max_len, "%s/" CORE_DEFAULT_DIR, getenv("HOME"));
 #endif
         set_core_working_dir(core_wd);
     }
