@@ -685,7 +685,7 @@ int main(int argc, char** argv) {
             abort();
         }
         else {
-            printf("Using %s for identity and contact database\n", core_wd);
+            printf("Core data dir is %s\n", core_wd);
         }
     }
         
