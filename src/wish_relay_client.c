@@ -83,7 +83,7 @@ static void wish_core_relay_periodic(wish_core_t* core, void* ctx) {
                 }
                 break;
             case WISH_RELAY_CLIENT_RESOLVING:
-#warning handle DNS resolve timeout it here vs. handle in port code?
+                //FIXME handle DNS resolve timeout it here vs. handle in port code? Now we handle it in port code...
                 break;
             default:
                 break;
