@@ -1218,6 +1218,9 @@ void wish_api_identity_friend_request(rpc_server_req* req, const uint8_t* args) 
          whilst waiting for the remote end to some day accept the friend request. */
         wish_identity_add_meta_connect(core, (uint8_t*) ruid, false);
         wish_identity_add_meta_unconfirmed_friend_request(core, (uint8_t *) ruid);
+        
+         // signal 'identity' here, as the identity list has now been altered. 
+        wish_core_signals_emit_string(core, "identity");
     }
     
     uint8_t buffer[WISH_PORT_RPC_BUFFER_SZ];

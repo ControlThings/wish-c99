@@ -19,6 +19,7 @@
 #include "wish_debug.h"
 #include "wish_local_discovery.h"
 #include "wish_connection_mgr.h"
+#include "wish_core_signals.h"
 
 /**
  * Wish Local Discovery
@@ -257,6 +258,8 @@ void wish_api_wld_friend_request(rpc_server_req* req, const uint8_t* args) {
         wish_identity_add_meta_connect(core, (uint8_t*) db[i].ruid, false);
         wish_identity_add_meta_unconfirmed_friend_request(core, db[i].ruid);
 
+        // signal 'identity' here, as the identity list has now been altered.
+        wish_core_signals_emit_string(core, "identity");
     }
 
     wish_connection_t* connection = wish_connection_init(core, luid, ruid);
