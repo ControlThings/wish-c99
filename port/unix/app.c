@@ -394,9 +394,12 @@ void setup_wish_local_discovery(void) {
      * local discovery port 9090 */
     const socket_opt_t option = 1;
     setsockopt(wld_fd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
-#ifdef __APPLE__
+    /* The following options needs to be set on
+     * -OSX: so that the UDP port can be shared between processes
+     * -Linux: together with do_loopback_broadcast() allows wld to work even if there are no network interfaces currently 'up'
+     */
     setsockopt(wld_fd, SOL_SOCKET, SO_REUSEPORT, &option, sizeof(option));
-#endif
+
 
     socket_set_nonblocking(wld_fd);
 
@@ -451,6 +454,42 @@ void cleanup_local_discovery(void) {
 
 }
 
+static void do_loopback_broadcast(wish_core_t* core, uint8_t *ad_msg, size_t ad_len) {
+    int s = socket(AF_INET, SOCK_DGRAM, 0);
+    if (s < 0) {
+        perror("Could not create socket for broadcasting");
+        abort();
+    }
+   
+    struct sockaddr_in sockaddr_src;
+    memset(&sockaddr_src, 0, sizeof (struct sockaddr_in));
+    sockaddr_src.sin_family = AF_INET;
+    sockaddr_src.sin_port = 0;
+    if (bind(s, (struct sockaddr *)&sockaddr_src, sizeof(struct sockaddr_in)) != 0) {
+        error("Send local discovery: bind()");
+    }
+    struct sockaddr_in si_other;
+    si_other.sin_family = AF_INET;
+    si_other.sin_port = htons(LOCAL_DISCOVERY_UDP_PORT);
+    inet_aton("127.0.0.1", &si_other.sin_addr);
+    socklen_t addrlen = sizeof(struct sockaddr_in);
+
+    if (sendto(s, ad_msg, ad_len, 0, 
+            (struct sockaddr*) &si_other, addrlen) == -1) {
+        if (errno == ENETUNREACH || errno == ENETDOWN) {
+            printf("wld: Network currently unreachable, or down. Retrying later. (local)\n");
+        } else if (errno == EPERM) {
+            printf("wld: Network returned EPERM. (local)\n");
+        } else {
+            error("sendto() (local)");
+        }
+    }
+
+    close(s);
+    
+    
+}
+
 int wish_send_advertizement(wish_core_t* core, uint8_t *ad_msg, size_t ad_len) {
     int s = socket(AF_INET, SOCK_DGRAM, 0);
     if (s < 0) {
@@ -490,6 +529,9 @@ int wish_send_advertizement(wish_core_t* core, uint8_t *ad_msg, size_t ad_len) {
     }
 
     close(s);
+    
+    do_loopback_broadcast(core, ad_msg, ad_len);
+    
     return 0;
 }
 
