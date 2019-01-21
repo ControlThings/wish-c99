@@ -267,4 +267,4 @@ void wish_identity_remove_meta_connect(wish_core_t *core, uint8_t *uid);
 
 void wish_identity_add_meta_unconfirmed_friend_request(wish_core_t *core, uint8_t *uid);
 
-void wish_identity_remove_meta_outgoing_friend_request(wish_core_t *core, uint8_t *uid);
+void wish_identity_remove_meta_unconfirmed_friend_request(wish_core_t *core, uint8_t *uid);
