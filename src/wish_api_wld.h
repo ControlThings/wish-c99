@@ -12,6 +12,12 @@
  *
  * @license Apache-2.0
  */
+
+/**
+ * @file wish_api_wld.h
+ * @brief Core-app RPC API handlers for 'wld.*' requests.
+ */
+
 #pragma once
 
 #ifdef __cplusplus
@@ -23,7 +29,7 @@ extern "C" {
     
 #include "wish_core.h"
     
-    /* Acl API */
+    /* wld API */
     
     void wish_api_wld_list(rpc_server_req* req, const uint8_t* args);
     
@@ -32,8 +38,6 @@ extern "C" {
     void wish_api_wld_clear(rpc_server_req* req, const uint8_t* args);
 
     void wish_api_wld_friend_request(rpc_server_req* req, const uint8_t* args);
-    
-    /* Acl internals */
     
 #ifdef __cplusplus
 }

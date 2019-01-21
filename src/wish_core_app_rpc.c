@@ -115,6 +115,9 @@ static void host_config(rpc_server_req* req, const uint8_t* args) {
     // FIXME version is shown in the separate version rpc command, consider removing this
     bson_append_string(&bs, "version", WISH_CORE_VERSION_STRING);
     bson_append_binary(&bs, "hid", core->id, WISH_WHID_LEN);
+    if (strnlen(core->wld_class, WISH_WLD_CLASS_MAX_LEN) > 0) {
+        bson_append_string(&bs, "wldClass", core->wld_class);
+    }
     bson_append_finish_object(&bs);
     bson_finish(&bs);
 
@@ -168,6 +171,44 @@ static void host_skip_connection_acl(rpc_server_req* req, const uint8_t* args) {
     rpc_server_send(req, bson_data(&bs), bson_size(&bs));
 }
 
+void host_set_wld_class(rpc_server_req* req, const uint8_t* args) {
+    wish_core_t* core = (wish_core_t*) req->server->context;
+    
+    bson_iterator it;
+    bson_iterator_from_buffer(&it, args);
+    
+    if ( bson_find_fieldpath_value("0", &it) != BSON_STRING ) {
+        rpc_server_error_msg(req, 397, "Argument 1 must be string");
+        return;
+    }
+    
+    const char *class = bson_iterator_string(&it);
+  
+    if (strnlen(class, WISH_WLD_CLASS_MAX_LEN) == WISH_WLD_CLASS_MAX_LEN) {
+        rpc_server_error_msg(req, 398, "Argument 1 too long");
+        return;
+    }
+    
+    strncpy(core->wld_class, class, WISH_WLD_CLASS_MAX_LEN);
+    wish_core_config_save(core);
+    
+    int buffer_len = 64;
+    uint8_t buffer[buffer_len];
+    
+    bson bs;
+    bson_init_buffer(&bs, buffer, buffer_len);
+    bson_append_bool(&bs, "data", true);
+    bson_finish(&bs);
+
+    if (bs.err) {
+        rpc_server_error_msg(req, 399, "Failed writing bson.");
+        return;
+    }
+    
+    rpc_server_send(req, bson_data(&bs), bson_size(&bs));
+    
+}
+
 handler methods_h =                                   { .op = "methods",                           .handler = methods, .args = "(void): string" };
 handler signals_h =                                   { .op = "signals",                           .handler = wish_core_signals, .args = "(filter?: string): Signal" };
 handler version_h =                                   { .op = "version",                           .handler = version, .args = "(void): string", .doc = "Returns core version." };
@@ -218,8 +259,10 @@ handler wld_clear_h =                                 { .op = "wld.clear",      
 handler wld_announce_h =                              { .op = "wld.announce",                      .handler = wish_api_wld_announce, .args = "(void): bool" };
 handler wld_friend_request_h =                        { .op = "wld.friendRequest",                 .handler = wish_api_wld_friend_request, .args = "(luid: Uid, ruid: Uid, rhid: Hid): bool" };
 
+
 handler host_config_h =                               { .op = "host.config",                       .handler = host_config };
 handler host_skip_connection_acl_h =                  { .op = "host.skipConnectionAcl",            .handler = host_skip_connection_acl, .args = "(bool): string" };
+handler host_set_wld_class_h =                             { .op = "host.setWldClass",                      .handler = host_set_wld_class, .args = "(class: string): bool" };
 
 
 static void wish_core_app_rpc_send(rpc_server_req* req, const bson* bs) {
@@ -292,6 +335,7 @@ void wish_core_app_rpc_init(wish_core_t* core) {
     
     rpc_server_register(core->app_api, &host_config_h);
     rpc_server_register(core->app_api, &host_skip_connection_acl_h);
+    rpc_server_register(core->app_api, &host_set_wld_class_h);
 }
 
 void wish_core_app_rpc_handle_req(wish_core_t* core, const uint8_t src_wsid[WISH_ID_LEN], const uint8_t *data) {

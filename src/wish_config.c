@@ -75,7 +75,6 @@ int wish_core_config_load(wish_core_t* core) {
         WISHDEBUG(LOG_CRITICAL, "Failed reading hostid!");
     }
     
-    
     // read relay servers list
     if ( bson_find_from_buffer(&it, bs.data, "relay") == BSON_ARRAY ) {
 
@@ -97,6 +96,12 @@ int wish_core_config_load(wish_core_t* core) {
             wish_relay_client_add(core, host);
         }
     }
+    
+    // read wld class
+    if (bson_find_from_buffer(&it, bs.data, "wldClass") == BSON_STRING) {
+        strncpy(core->wld_class, bson_iterator_string(&it), WISH_WLD_CLASS_MAX_LEN);
+    }
+    
     bson_destroy(&bs);
     
     return 0;
@@ -120,6 +125,9 @@ int wish_core_config_save(wish_core_t* core) {
     bson_init_buffer(&bs, buf, buf_len);
     bson_append_string(&bs, "version", WISH_CORE_VERSION_STRING);
     bson_append_binary(&bs, "id", core->id, WISH_WHID_LEN);
+    if (strnlen(core->wld_class, WISH_WLD_CLASS_MAX_LEN) > 0) {
+        bson_append_string(&bs, "wldClass", core->wld_class);
+    }
 
     if (core->relay_db != NULL) {
         wish_relay_client_t* relay;

@@ -14,8 +14,9 @@
  */
 #pragma once
 
-/* 
- * Wish local UDP discovery functionality
+/**
+ * @file wish_local_discovery.h
+ * @brief Wish local UDP discovery functionality, also known as 'wld'.
  */
 
 #include <stddef.h>
