@@ -20,13 +20,9 @@
 
 #define WISH_ED25519_SEED_LEN   32
 
-/* The maximum number of Wish identities that the identity database has */
-#define WISH_MAX_WUID_LIST_LEN 4
 /** The maximum length of the Alias string of an identity, including terminating null char */
 #define WISH_ALIAS_LEN 48
-/* The maximum number of references to other identities ("friends") that
- * an identity can have */
-#define WISH_MAX_CONTACTS 4
+
 /* The length of a reference to an other identity - references are wuids
  * */
 #define WISH_MAX_CONTACT_LEN WISH_ID_LEN
@@ -37,9 +33,6 @@
 
 /** The maximum number of local identities (num id database entries in with privkeys) */
 #define WISH_NUM_LOCAL_IDS 2
-
-
-
 
 #define WISH_PUBKEY_LEN  32     /* Length of ED25519 pubkey */
 #define WISH_PRIVKEY_LEN 64     /* Length of ED25519 privkey */
@@ -57,7 +50,7 @@ typedef struct {
     uint8_t privkey[WISH_PRIVKEY_LEN];
     char alias[WISH_ALIAS_LEN];
     char transports[WISH_MAX_TRANSPORTS][WISH_MAX_TRANSPORT_LEN];
-    char contacts[WISH_MAX_CONTACTS][WISH_MAX_CONTACT_LEN];
+    //char contacts[WISH_MAX_CONTACTS][WISH_MAX_CONTACT_LEN]; // wish-c99 currently does not limit how the identities see different contacts (as only one local identity is supported) 
     /** BSON object containing permissions (will be superseded by ACL) */
     const char* permissions;
     /** BSON object containing meta like phone, email etc */
