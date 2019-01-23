@@ -19,6 +19,7 @@ Wish key features and APIs
 
 ### Prerequisites
 
+* A modern Unix-like operating system, tested on Linux and MacOSX.
 * C compiler, gcc or clang. On MacOSX, the clang compiler is installed as a part Xcode.
 * cmake, which is available via your operating system's package repository.
 
