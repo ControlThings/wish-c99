@@ -15,9 +15,13 @@ Wish key features and APIs
 * Manage and provide access control
 * Manage connectivity
 
-This is a C-language implementation based on the Wish (wish-core) reference implementation by André Kaustell.
-
 ## Build
+
+### Prerequisites
+
+* A modern Unix-like operating system, tested on Linux and MacOSX.
+* C compiler, gcc or clang. On MacOSX, the clang compiler is installed as a part Xcode.
+* cmake, which is available via your operating system's package repository.
 
 ```sh
 git submodule init
@@ -29,7 +33,10 @@ make
 ```
 ## Install
 This binary can be executed wherever, make sure the executable permissions are set ``chmod u+x``. 
-**It will also require write access to the same folder, it will store config files and a keystore.**
+
+Wish-core creates its config files and keystore under the user's home directory: ~/.wish. If you want save the files in the current working directory instead, you can supply the command line argument '-d'. **Note that in this case it will also require write access to the working directory.**
+
+
 
 ## Usage
 ```
@@ -69,6 +76,14 @@ wish-cli
 identity.create('My Identity')
 ```
 2. Run an app or service which uses the daemon, for instance one of the `mist-examples` from the previous section
+
+## License
+
+This project is licensed under the Apache 2.0 license. See LICENSE.md for details.
+
+## Contributing
+
+See CONTRIBUTING.md
 
 ## Acknowledgements
 
