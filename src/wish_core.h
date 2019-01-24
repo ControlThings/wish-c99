@@ -29,6 +29,8 @@ extern "C" {
 #define WISH_WSID_LEN   32
     
 #define WISH_PROTOCOL_NAME_MAX_LEN 10
+    
+#define WISH_WLD_CLASS_MAX_LEN 48
 
 typedef struct {
     char* base;
@@ -158,6 +160,9 @@ typedef struct wish_core {
     
     /* Wish Directory */
     struct wish_directory* directory;
+    
+    /** Storage for an optional local discovery class string, which will be announced as meta.product in the broadcast */
+    char wld_class[WISH_WLD_CLASS_MAX_LEN];
 } wish_core_t;
 
 #include "wish_config.h"

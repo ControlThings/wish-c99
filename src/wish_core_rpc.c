@@ -791,7 +791,7 @@ static void friend_req_callback(rpc_client_req* req, void* context, const uint8_
         wish_core_signals_emit_string(core, "identity");
     }
     
-    wish_identity_remove_meta_outgoing_friend_request(core, new_friend_id_from_cert.uid);
+    wish_identity_remove_meta_unconfirmed_friend_request(core, new_friend_id_from_cert.uid);
     wish_identity_remove_meta_connect(core, new_friend_id_from_cert.uid);
     
     /* emit friendRequesteeAccepted even if it was an identity which already existed */

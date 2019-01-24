@@ -20,11 +20,16 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
+#ifdef _WIN32
+#include <winsock2.h>
+#include "helper.h"
+#else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h> 
-#include <time.h>
 #include <arpa/inet.h>
+#endif
+#include <time.h>
 #include <errno.h>
 
 #include "wish_relay_client.h"

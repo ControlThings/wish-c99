@@ -39,6 +39,7 @@ The wish core takes the following arguments
     -i Starts the core in claimable mode, which means the first remote wish identity who 
        accesses this core can claim the admin role
     -h for displaying help
+    -d Use the current directory for configuration files, instead of $HOME/.wish
 
     -s start accepting incoming connections ("server" mode)
     -p <port> listen for incoming connections at this TCP port (default: 37009), used by remote wish cores for reaching the local apps

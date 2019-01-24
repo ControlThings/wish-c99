@@ -25,11 +25,18 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
+
+#ifdef _WIN32
+#include <inttypes.h>
+#include <winsock2.h>
+#else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h> 
-#include <time.h>
 #include <arpa/inet.h>
+#endif
+
+#include <time.h>
 #include <fcntl.h>
 #include <errno.h>
 
@@ -90,8 +97,13 @@ void setup_app_server(wish_core_t* core, uint16_t app_port) {
         perror("App server socket creation");
         abort();
     }
+#ifdef _WIN32
+    const char option = 1;
+    setsockopt(app_serverfd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
+#else
     int option = 1;
     setsockopt(app_serverfd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
+#endif
     socket_set_nonblocking(app_serverfd);
     struct sockaddr_in server_addr;
     memset(&server_addr, 0, sizeof (server_addr));
@@ -156,7 +168,11 @@ void send_core_to_app_via_tcp(wish_core_t* core, const uint8_t wsid[WISH_ID_LEN]
 #ifdef __APPLE__
             ssize_t write_ret = send(app_fds[i], buf, 2+len, SO_NOSIGPIPE);
 #else
+#ifdef _WIN32
+            ssize_t write_ret = send(app_fds[i], buf, 2+len, 0);
+#else
             ssize_t write_ret = send(app_fds[i], buf, 2+len, MSG_NOSIGNAL);
+#endif
 #endif
             
             if (write_ret != 2+len) {

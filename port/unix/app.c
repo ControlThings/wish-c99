@@ -20,11 +20,19 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <wincrypt.h>
+#include "helper.h"
+#else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h> 
-#include <time.h>
 #include <arpa/inet.h>
+#endif
+#include <time.h>
 #include <fcntl.h>
 #include <errno.h>
 #include "utlist.h"
@@ -51,6 +59,12 @@
 
 #ifdef WITH_APP_TCP_SERVER
 #include "app_server.h"
+#endif
+
+#ifdef _WIN32
+typedef char socket_opt_t;
+#else
+typedef int socket_opt_t;
 #endif
 
 wish_core_t core_inst;
@@ -83,12 +97,20 @@ int write_to_socket(wish_connection_t* connection, unsigned char* buffer, int le
 #define LOCAL_DISCOVERY_UDP_PORT 9090
 
 void socket_set_nonblocking(int sockfd) {
+#ifdef _WIN32
+    unsigned long value = 1;
+    if (ioctlsocket(sockfd, FIONBIO, &value) == SOCKET_ERROR) {
+        perror("When setting socket to non-blocking mode");
+        exit(1);
+    }
+#else
     int status = fcntl(sockfd, F_SETFL, fcntl(sockfd, F_GETFL, 0) | O_NONBLOCK);
 
     if (status == -1){
         perror("When setting socket to non-blocking mode");
         abort();
     }
+#endif
 }
 
 
@@ -239,7 +261,10 @@ void wish_close_connection(wish_core_t* core, wish_connection_t* connection) {
     wish_core_signal_tcp_event(core, connection, TCP_DISCONNECTED);
 }
 
-char usage_str[] = "Wish Core " WISH_CORE_VERSION_STRING
+/** This defines the default data directory name (under home dir) for the core*/
+#define CORE_DEFAULT_DIR ".wish"
+
+static char usage_str[] = "Wish Core " WISH_CORE_VERSION_STRING
 "\n\n  Usage: %s [options]\n\
     -b don't broadcast own uid over local discovery\n\
     -l don't listen to local discovery broadcasts\n\
@@ -249,7 +274,9 @@ char usage_str[] = "Wish Core " WISH_CORE_VERSION_STRING
     -p <port> listen for incoming connections at this TCP port\n\
     -r connect to a relay server, for accepting incoming connections via the relay.\n\
 \n\
-    -a <port> start \"App TCP\" interface server at port\n";
+    -a <port> start \"App TCP\" interface server at port\n\
+\n\
+    -d Use current working directory for database files; default is to use $HOME/" CORE_DEFAULT_DIR "\n";
 
 static void print_usage(char *executable_name) {
     printf(usage_str, executable_name);
@@ -285,11 +312,14 @@ extern enum app_state app_states[];
 #endif
 
 
+/** If this is set to true, the core's working dir is kept at current working directory. */
+static bool override_core_wd = false;
+
 /* Process the command line options. The function will set global
  * variables accordingly */
 static void process_cmdline_opts(int argc, char** argv) {
     int opt = 0;
-    while ((opt = getopt(argc, argv, "hbilc:C:R:sSp:ra:")) != -1) {
+    while ((opt = getopt(argc, argv, "hbilc:C:R:sSp:ra:d")) != -1) {
         switch (opt) {
         case 'b':
             printf("Will not do wld broadcast!\n");
@@ -330,6 +360,11 @@ static void process_cmdline_opts(int argc, char** argv) {
             abort();
 #endif
             break;
+        case 'd':
+            /* Allows saving the identity database and other files to working directory instead of global place */
+            override_core_wd = true;
+            
+            break;
         default:
             print_usage(argv[0]);
             exit(1);
@@ -354,16 +389,17 @@ void setup_wish_local_discovery(void) {
         error("udp socket");
     }
 
-#if 1
     /* Set socketoption REUSEADDR on the UDP local discovery socket so
      * that we can have several programs listening on the one and same
      * local discovery port 9090 */
-    int option = 1;
+    const socket_opt_t option = 1;
     setsockopt(wld_fd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
-#ifdef __APPLE__
+    /* The following options needs to be set on
+     * -OSX: so that the UDP port can be shared between processes
+     * -Linux: together with do_loopback_broadcast() allows wld to work even if there are no network interfaces currently 'up'
+     */
     setsockopt(wld_fd, SOL_SOCKET, SO_REUSEPORT, &option, sizeof(option));
-#endif
-#endif
+
 
     socket_set_nonblocking(wld_fd);
 
@@ -418,14 +454,50 @@ void cleanup_local_discovery(void) {
 
 }
 
+static void do_loopback_broadcast(wish_core_t* core, uint8_t *ad_msg, size_t ad_len) {
+    int s = socket(AF_INET, SOCK_DGRAM, 0);
+    if (s < 0) {
+        perror("Could not create socket for broadcasting");
+        abort();
+    }
+   
+    struct sockaddr_in sockaddr_src;
+    memset(&sockaddr_src, 0, sizeof (struct sockaddr_in));
+    sockaddr_src.sin_family = AF_INET;
+    sockaddr_src.sin_port = 0;
+    if (bind(s, (struct sockaddr *)&sockaddr_src, sizeof(struct sockaddr_in)) != 0) {
+        error("Send local discovery: bind()");
+    }
+    struct sockaddr_in si_other;
+    si_other.sin_family = AF_INET;
+    si_other.sin_port = htons(LOCAL_DISCOVERY_UDP_PORT);
+    inet_aton("127.0.0.1", &si_other.sin_addr);
+    socklen_t addrlen = sizeof(struct sockaddr_in);
+
+    if (sendto(s, ad_msg, ad_len, 0, 
+            (struct sockaddr*) &si_other, addrlen) == -1) {
+        if (errno == ENETUNREACH || errno == ENETDOWN) {
+            printf("wld: Network currently unreachable, or down. Retrying later. (local)\n");
+        } else if (errno == EPERM) {
+            printf("wld: Network returned EPERM. (local)\n");
+        } else {
+            error("sendto() (local)");
+        }
+    }
+
+    close(s);
+    
+    
+}
+
 int wish_send_advertizement(wish_core_t* core, uint8_t *ad_msg, size_t ad_len) {
     int s = socket(AF_INET, SOCK_DGRAM, 0);
     if (s < 0) {
         perror("Could not create socket for broadcasting");
         abort();
     }
-
-    int broadcast = 1;
+    
+    const socket_opt_t broadcast = 1;
     if (setsockopt(s, SOL_SOCKET, SO_BROADCAST, 
             &broadcast, sizeof(broadcast))) {
         error("set sock opt");
@@ -457,6 +529,9 @@ int wish_send_advertizement(wish_core_t* core, uint8_t *ad_msg, size_t ad_len) {
     }
 
     close(s);
+    
+    do_loopback_broadcast(core, ad_msg, ad_len);
+    
     return 0;
 }
 
@@ -476,7 +551,8 @@ void setup_wish_server(wish_core_t* core) {
         perror("server socket creation");
         abort();
     }
-    int option = 1;
+    
+    const socket_opt_t option = 1;
     setsockopt(serverfd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
     socket_set_nonblocking(serverfd);
 
@@ -499,6 +575,36 @@ void setup_wish_server(wish_core_t* core) {
 
 
 
+#ifdef _WIN32
+HCRYPTPROV crypt_prov;
+static int seed_random_init() {
+    
+    if (CryptAcquireContext(&crypt_prov, NULL, NULL, PROV_RSA_FULL, 0) != TRUE) {
+        printf("Failed creating crypt cointainer (error=0x%lx), this is dangerous, bailing out.\n", GetLastError());
+        exit(1);
+    }
+    
+    return 0;
+}
+
+#if 0
+static void seed_random_deinit() {
+    CryptReleaseContext(crypt_prov, 0);
+}
+#endif
+
+static long int random(void) {
+    unsigned int randval;
+
+    BOOL success = CryptGenRandom(crypt_prov, sizeof(randval), (BYTE *) &randval);
+    if (!success) {
+        printf("Failed generating random number, this is dangerous, bailing out.\n");
+        exit(1);
+    }
+    return randval;
+}
+
+#else
 static int seed_random_init() {
     unsigned int randval;
     
@@ -519,10 +625,56 @@ static int seed_random_init() {
     
     return 0;
 }
+#endif
+
+/** 
+ * Set the directory for data files of the wish core
+ * Data files are (among others) the identity database and wish core's config file named wish.conf
+ */
+static void set_core_working_dir(char *path) {
+    /* For now, this sets the current working dir of the process */
+    
+#ifdef _WIN32
+    struct _stat st = {0};
+
+    if (_stat(path, &st) == -1) {
+        int mkdir_ret = mkdir(path);
+        if (mkdir_ret == -1) {
+            perror("When mkdir'ing core data dir");
+            abort();
+        }
+    }
+#else
+    struct stat st = {0};
+
+    if (stat(path, &st) == -1) {
+        int mkdir_ret = mkdir(path, 0700);
+        if (mkdir_ret == -1) {
+            perror("When mkdir'ing core data dir");
+            abort();
+        }
+    }
+#endif
+    int ret = chdir(path);
+    if (ret == -1) {
+        printf("Error while setting core data dir to %s, result: %s\n", path, strerror(errno));
+        abort();
+    }
+    else {
+        printf("Core data dir is %s\n", path);
+    }
+}
 
 #define IO_BUF_LEN 1000
 
 int main(int argc, char** argv) {
+#ifdef __WIN32__
+   WORD versionWanted = MAKEWORD(1, 1);
+   WSADATA wsaData;
+   WSAStartup(versionWanted, &wsaData);
+#endif
+    
+    
     wish_platform_set_malloc(malloc);
     wish_platform_set_realloc(realloc);
     wish_platform_set_free(free);
@@ -557,6 +709,28 @@ int main(int argc, char** argv) {
         as_app_server = true;
         skip_connection_acl = false;
     }
+    
+    size_t core_wd_max_len = 1024;
+    char core_wd[core_wd_max_len];
+    if (!override_core_wd) {
+#ifdef _WIN32
+        snprintf(core_wd, core_wd_max_len, "%s\\" CORE_DEFAULT_DIR, getenv("USERPROFILE"));
+#else
+        snprintf(core_wd, core_wd_max_len, "%s/" CORE_DEFAULT_DIR, getenv("HOME"));
+#endif
+        set_core_working_dir(core_wd);
+    }
+    else {
+        char *cwd = getcwd(core_wd, core_wd_max_len);
+        if (cwd == NULL) {
+            perror("When calling getcwd");
+            abort();
+        }
+        else {
+            printf("Core data dir is %s\n", core_wd);
+        }
+    }
+        
 
     /* Initialize Wish core (RPC servers) */
     wish_core_init(core);
@@ -665,7 +839,7 @@ int main(int argc, char** argv) {
                 
                     /* Note: Before select() we added fd to be checked for writability, if the relay fd was in this state. Now we need to check writability under the same condition */
                     if (port_select_fd_is_writable(relay->sockfd) && relay->curr_state ==  WISH_RELAY_CLIENT_CONNECTING) {
-                        int connect_error = 0;
+                        socket_opt_t connect_error = 0;
                         socklen_t connect_error_len = sizeof(connect_error);
                         if (getsockopt(relay->sockfd, SOL_SOCKET, SO_ERROR, 
                                 &connect_error, &connect_error_len) == -1) {
@@ -828,7 +1002,7 @@ int main(int argc, char** argv) {
                      * means that a previous connect succeeded. (because
                      * normally we don't select for socket writability!)
                      * */
-                    int connect_error = 0;
+                    socket_opt_t connect_error = 0;
                     socklen_t connect_error_len = sizeof(connect_error);
                     if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, 
                             &connect_error, &connect_error_len) == -1) {

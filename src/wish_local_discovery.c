@@ -430,11 +430,13 @@ void wish_ldiscover_advertize(wish_core_t* core, uint8_t* uid) {
     bson_init_buffer(&bs, msg+2, msg_len-2);
     
     bson_append_string(&bs, "alias", id.alias);
-#ifdef WLD_META_PRODUCT
-    bson_append_start_object(&bs, "meta");
-    bson_append_string(&bs, "product", WLD_META_PRODUCT);
-    bson_append_finish_object(&bs);
-#endif
+
+    if (strnlen(core->wld_class, WISH_WLD_CLASS_MAX_LEN) > 0) {
+        bson_append_start_object(&bs, "meta");
+        bson_append_string(&bs, "product", core->wld_class);
+        bson_append_finish_object(&bs);
+    }
+
     bson_append_binary(&bs, "wuid", uid, WISH_ID_LEN);
 
     uint8_t host_id[WISH_WHID_LEN];

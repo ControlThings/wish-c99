@@ -66,6 +66,10 @@ include_directories(src port/unix deps/bson deps/ed25519/src deps/mbedtls/includ
 
 file(GLOB wish_SRC "src/*.c")
 file(GLOB wish_port_SRC "port/unix/*.c")
+if(BUILD_WIN32)
+    set(wish_port_SRC ${wish_port_SRC} port/win32/helper.c)
+endif(BUILD_WIN32)
+
 file(GLOB_RECURSE wish_deps_SRC "deps/bson/*.c" "deps/ed25519/src/*.c"
 "deps/mbedtls/library/*.c" "deps/uthash/src/*.c" "deps/wish-rpc-c99/src/*.c" "deps/dns/src/dns.c")
 
@@ -87,3 +91,11 @@ add_executable(${EXECUTABLE} ${wish_SRC} ${wish_port_SRC} ${wish_deps_SRC})
 #enable_testing()
 
 #add_test(NAME bson_test COMMAND ${TEST_EXECUTABLE})
+
+if(BUILD_WIN32)
+    message("Should be building for win32")
+    include_directories(port/win32)
+    target_link_libraries(wish-core ws2_32)
+endif(BUILD_WIN32)
+
+

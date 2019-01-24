@@ -1,6 +1,17 @@
 #include <stddef.h>
 #include <stdbool.h>
+
+#ifdef _WIN32
+#include <sys/time.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <wincrypt.h>
+#include "helper.h"
+#else
 #include <sys/select.h>
+#endif
 
 #include "port_select.h"
 

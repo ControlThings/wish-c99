@@ -1348,6 +1348,43 @@ bool wish_identity_has_meta_unconfirmed_friend_request_flag(wish_identity_t *id)
     return friend_request;
 }
 
+/**
+ * This function appends bson doc to identity's meta structure, and saves the identity to database. 
+ * If the identity does not have 'meta' document, it will be created, *and* released automatically.
+ * 
+ * @note In case the 'meta' did not exist, the identity structure's meta field 'id.meta' will *not* 
+ * point to the newly created structure (it will be NULL) after this function returns.
+ * 
+ * @param core
+ * @param id the identity to whose meta we will append.
+ * @param doc the document to be appended. If an element with same name exists in meta, 
+ * the value will be updated, or if appended value is 'null', then it will be deleted.
+ * 
+ */
+static void wish_identity_meta_append_bson(wish_core_t *core, wish_identity_t* id, bson* append) {
+    bson meta;
+    bool meta_created = false;
+    if (id->meta) {
+        bson_init_with_data(&meta, id->meta);
+    } else {
+        bson_init(&meta);
+        bson_finish(&meta);
+        meta_created = true;
+    }
+    
+    bson_update(&meta, append);
+    
+    id->meta = bson_data(&meta);
+    
+    int ret = wish_identity_update(core, id);
+
+    if (meta_created) {
+        bson_destroy(&meta);
+        // set meta to NULL or the identity_destroy will try to free it
+        id->meta = NULL;
+    }
+}
+
 void wish_identity_add_meta_connect(wish_core_t *core, uint8_t *uid, bool status) {
     //WISHDEBUG(LOG_CRITICAL, "Add meta connect");
     wish_identity_t id;
@@ -1364,27 +1401,7 @@ void wish_identity_add_meta_connect(wish_core_t *core, uint8_t *uid, bool status
     bson_append_bool(&append, "connect", false);
     bson_finish(&append);
     
-    bson meta;
-    bool meta_created = false;
-    if (id.meta) {
-        bson_init_with_data(&meta, id.meta);
-    } else {
-        bson_init(&meta);
-        bson_finish(&meta);
-        meta_created = true;
-    }
-    
-    bson_update(&meta, &append);
-    
-    id.meta = bson_data(&meta);
-    
-    int ret = wish_identity_update(core, &id);
-
-    if (meta_created) {
-        bson_destroy(&meta);
-        // set meta to NULL or the identity_destroy will try to free it
-        id.meta = NULL;
-    }
+    wish_identity_meta_append_bson(core, &id, &append);
     
     wish_identity_destroy(&id);
 }
@@ -1405,27 +1422,7 @@ void wish_identity_remove_meta_connect(wish_core_t *core, uint8_t *uid) {
     bson_append_null(&remove, "connect");
     bson_finish(&remove);
     
-    bson meta;
-    bool meta_created = false;
-    if (id.meta) {
-        bson_init_with_data(&meta, id.meta);
-    } else {
-        bson_init(&meta);
-        bson_finish(&meta);
-        meta_created = true;
-    }
-    
-    bson_update(&meta, &remove);
-    
-    id.meta = bson_data(&meta);
-    
-    int ret = wish_identity_update(core, &id);
-
-    if (meta_created) {
-        bson_destroy(&meta);
-        // set meta to NULL or the identity_destroy will try to free it
-        id.meta = NULL;
-    }
+    wish_identity_meta_append_bson(core, &id, &remove);
     
     wish_identity_destroy(&id);
 }
@@ -1446,32 +1443,12 @@ void wish_identity_add_meta_unconfirmed_friend_request(wish_core_t *core, uint8_
     bson_append_bool(&append, "unconfirmedFriendRequest", true);
     bson_finish(&append);
     
-    bson meta;
-    bool meta_created = false;
-    if (id.meta) {
-        bson_init_with_data(&meta, id.meta);
-    } else {
-        bson_init(&meta);
-        bson_finish(&meta);
-        meta_created = true;
-    }
-    
-    bson_update(&meta, &append);
-    
-    id.meta = bson_data(&meta);
-    
-    int ret = wish_identity_update(core, &id);
-
-    if (meta_created) {
-        bson_destroy(&meta);
-        // set meta to NULL or the identity_destroy will try to free it
-        id.meta = NULL;
-    }
+    wish_identity_meta_append_bson(core, &id, &append);
     
     wish_identity_destroy(&id);
 }
 
-void wish_identity_remove_meta_outgoing_friend_request(wish_core_t *core, uint8_t *uid) {
+void wish_identity_remove_meta_unconfirmed_friend_request(wish_core_t *core, uint8_t *uid) {
         //WISHDEBUG(LOG_CRITICAL, "remove meta connect");
     wish_identity_t id;
     if ( wish_identity_load(uid, &id) != RET_SUCCESS ) {
@@ -1487,27 +1464,7 @@ void wish_identity_remove_meta_outgoing_friend_request(wish_core_t *core, uint8_
     bson_append_null(&remove, "unconfirmedFriendRequest");
     bson_finish(&remove);
     
-    bson meta;
-    bool meta_created = false;
-    if (id.meta) {
-        bson_init_with_data(&meta, id.meta);
-    } else {
-        bson_init(&meta);
-        bson_finish(&meta);
-        meta_created = true;
-    }
-    
-    bson_update(&meta, &remove);
-    
-    id.meta = bson_data(&meta);
-    
-    int ret = wish_identity_update(core, &id);
-
-    if (meta_created) {
-        bson_destroy(&meta);
-        // set meta to NULL or the identity_destroy will try to free it
-        id.meta = NULL;
-    }
+    wish_identity_meta_append_bson(core, &id, &remove);
     
     wish_identity_destroy(&id);
 }
