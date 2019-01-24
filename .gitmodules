@@ -4,7 +4,7 @@
 
 [submodule "deps/ed25519"]
 	path = deps/ed25519
-	url = https://github.com/rdeker/ed25519.git
+	url = https://github.com/ControlThings/ed25519.git
 [submodule "deps/mbedtls"]
 	path = deps/mbedtls
 	url = https://github.com/ARMmbed/mbedtls.git
