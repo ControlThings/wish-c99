@@ -107,7 +107,7 @@ return_t wish_parse_transport_ip(const char *url, size_t url_len, wish_ip_addr_t
     
     int actual_ip_str_len = colon-start_of_ip_str;
     if (actual_ip_str_len > ip_str_max_len) {
-        WISHDEBUG(LOG_CRITICAL, "Parse error, IP part seems too long");
+        //WISHDEBUG(LOG_CRITICAL, "Parse error, IP part seems too long");
         return retval;
     }
     if (actual_ip_str_len < ip_str_min_len) {
