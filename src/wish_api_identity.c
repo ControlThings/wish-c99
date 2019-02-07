@@ -1210,6 +1210,7 @@ void wish_api_identity_friend_request(rpc_server_req* req, const uint8_t* args) 
         memcpy(new_id.uid, ruid, WISH_ID_LEN);
         strncpy(new_id.alias, alias, WISH_ALIAS_LEN);
         memcpy(new_id.pubkey, pubkey, WISH_PUBKEY_LEN);
+        /* FIXME support multiple transports */
         strncpy(new_id.transports[0], transport, WISH_MAX_TRANSPORT_LEN);
         
         wish_save_identity_entry(&new_id);
