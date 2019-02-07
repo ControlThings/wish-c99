@@ -453,6 +453,9 @@ void wish_api_identity_create(rpc_server_req* req, const uint8_t* args) {
 void wish_api_identity_update(rpc_server_req* req, const uint8_t* args) { 
     wish_core_t* core = (wish_core_t*) req->server->context;
     
+    /* If this variable is set later to false, then it means that the update does not concern "meta" element of identity. */
+    bool update_meta = true;
+    
     bson_iterator it;
     bson_find_from_buffer(&it, args, "0");
     
@@ -484,37 +487,61 @@ void wish_api_identity_update(rpc_server_req* req, const uint8_t* args) {
         //WISHDEBUG(LOG_CRITICAL, "Found new alias to update: %s", alias);
         strncpy(id.alias, alias, WISH_ALIAS_LEN);
     }
-
-    // Start dealing with custom meta data fields
+    
+    /* Handle update of hosts.transports */
     bson_iterator_from_buffer(&it, args);
+    const size_t transport_path_max_len = 32;
+    char transport_path[transport_path_max_len];
+    int transport_index = 0;
+    wish_platform_snprintf(transport_path, transport_path_max_len, "1.hosts.0.transports.%d", transport_index);
     
-    if ( bson_find_fieldpath_value("1", &it) != BSON_OBJECT ) {
-        rpc_server_error_msg(req, 63, "Expecting object.");
-        wish_identity_destroy(&id);
-        return;
+    /* identity.update(myUid, { hosts: [ { transports: [ "wish://my.new.transport.example.com:40000" ] } ] }) */
+    while ( bson_find_fieldpath_value(transport_path, &it) == BSON_STRING ) {
+        update_meta = false;
+        const char *transport = bson_iterator_string(&it);
+        //WISHDEBUG(LOG_CRITICAL, "Update to transport %s", transport);
+        
+        strncpy(id.transports[transport_index], transport, WISH_MAX_TRANSPORT_LEN);
+        
+        transport_index++;
+        if (transport_index >= WISH_MAX_TRANSPORTS) {
+            break;
+        }
+        wish_platform_snprintf(transport_path, transport_path_max_len, "1.hosts.0.transports.%d", transport_index);
     }
-    
+
     bson meta;
     bool meta_created = false;
-    if (id.meta) {
-        bson_init_with_data(&meta, id.meta);
-    } else {
-        bson_init(&meta);
-        bson_finish(&meta);
-        meta_created = true;
+    if (update_meta) {
+        // Start dealing with custom meta data fields
+        bson_iterator_from_buffer(&it, args);
+
+        if ( bson_find_fieldpath_value("1", &it) != BSON_OBJECT ) {
+            rpc_server_error_msg(req, 63, "Expecting object.");
+            wish_identity_destroy(&id);
+            return;
+        }
+
+        if (id.meta) {
+            bson_init_with_data(&meta, id.meta);
+        } else {
+            bson_init(&meta);
+            bson_finish(&meta);
+            meta_created = true;
+        }
+
+        // create the update query object from iterator pointing at update parameter object
+        bson update;
+        bson_init(&update);
+        bson_append_iterator(&update, &it);
+        bson_finish(&update);
+
+        // run update on orig
+        bson_update(&meta, &update);
+        bson_destroy(&update);
+
+        id.meta = bson_data(&meta);
     }
-
-    // create the update query object from iterator pointing at update parameter object
-    bson update;
-    bson_init(&update);
-    bson_append_iterator(&update, &it);
-    bson_finish(&update);
-    
-    // run update on orig
-    bson_update(&meta, &update);
-    bson_destroy(&update);
-
-    id.meta = bson_data(&meta);
     
     int ret = wish_identity_update(core, &id);
 
@@ -526,7 +553,7 @@ void wish_api_identity_update(rpc_server_req* req, const uint8_t* args) {
     
     int buf_len = 128;
     uint8_t buf[buf_len];
-    
+
     bson bs;
     bson_init_buffer(&bs, buf, buf_len);
     bson_append_binary(&bs, "0", id.uid, WISH_UID_LEN);
