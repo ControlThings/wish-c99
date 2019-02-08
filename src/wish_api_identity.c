@@ -119,7 +119,7 @@ void wish_api_identity_import(rpc_server_req* req, const uint8_t* args) {
     
     if ( bson_iterator_type(&it) != BSON_BINDATA) {
         WISHDEBUG(LOG_CRITICAL, "Expected argument 1 to be Buffer");
-        rpc_server_error_msg(req, 76, "Expected argument 1 to be Buffer. Try exportIdDoc.data");
+        rpc_server_error_msg(req, 76, "Expected argument 1 to be Buffer. Should you have supplied the 'data' element instead of the whole exported document?");
         return;
     }
 
