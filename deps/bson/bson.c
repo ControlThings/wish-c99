@@ -3648,6 +3648,7 @@ void bson_update(bson* orig, bson* update) {
     
     while ( BSON_EOO != bson_iterator_next(&sit) ) {
         const char* key = bson_iterator_key(&sit);
+        /* FIXME this should be removed, as the structure of identity.update handler was changed in commit b62186648 */
         if ( strncmp(key, "alias", 6) == 0 ) { continue; }
         
         bson_iterator i;
