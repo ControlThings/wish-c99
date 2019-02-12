@@ -249,7 +249,11 @@ again:
         uint16_t expect_len = app_transport_expect_bytes[i];
         if (ring_buffer_length(&app_rx_ring_bufs[i]) >= expect_len) {
             uint8_t payload[expect_len];
-            ring_buffer_read(&app_rx_ring_bufs[i], payload, expect_len);
+            uint16_t rb_read = ring_buffer_read(&app_rx_ring_bufs[i], payload, expect_len);
+            if (rb_read != expect_len) {
+                WISHDEBUG(LOG_CRITICAL, "rb_read mismatch, %i while expecting %i", rb_read, expect_len);
+                abort();
+            }
             app_transport_states[i] = APP_TRANSPORT_WAIT_FRAME_LEN;
             
             //printf("Received whole frame! len = %i\n", expect_len);
