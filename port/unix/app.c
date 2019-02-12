@@ -838,7 +838,7 @@ int main(int argc, char** argv) {
                 LL_FOREACH(core->relay_db, relay) {
                 
                     /* Note: Before select() we added fd to be checked for writability, if the relay fd was in this state. Now we need to check writability under the same condition */
-                    if (port_select_fd_is_writable(relay->sockfd) && relay->curr_state ==  WISH_RELAY_CLIENT_CONNECTING) {
+                    if (relay->curr_state ==  WISH_RELAY_CLIENT_CONNECTING && relay->sockfd != -1 && port_select_fd_is_writable(relay->sockfd)) {
                         socket_opt_t connect_error = 0;
                         socklen_t connect_error_len = sizeof(connect_error);
                         if (getsockopt(relay->sockfd, SOL_SOCKET, SO_ERROR, 
@@ -862,7 +862,13 @@ int main(int argc, char** argv) {
                             relay->sockfd = -1;
                         }
                     }
-                    else if (port_select_fd_is_readable(relay->sockfd) && relay->curr_state != WISH_RELAY_CLIENT_INITIAL) { /* Note: Before select() we added fd to be checked for readability, if the relay fd was in some other state than its initial state. Now we need to check writability under the same condition */
+                    else if (relay->curr_state == WISH_RELAY_CLIENT_WAIT_RECONNECT) {
+                        /* connect to relay server has failed or disconnected and we wait some time before retrying  */
+                    }
+                    else if (relay->curr_state == WISH_RELAY_CLIENT_RESOLVING) {
+                        /* Don't do anything as the resolver is resolving. relay->sockfd is not valid as it has not yet been initted! */
+                    }
+                    else if (relay->curr_state != WISH_RELAY_CLIENT_INITIAL && relay->sockfd != -1 && port_select_fd_is_readable(relay->sockfd)) { /* Note: Before select() we added fd to be checked for readability, if the relay fd was in some other state than its initial state. Now we need to check writability under the same condition */
                         uint8_t byte;   /* That's right, we read just one
                             byte at a time! */
                         int read_len = read(relay->sockfd, &byte, 1);
