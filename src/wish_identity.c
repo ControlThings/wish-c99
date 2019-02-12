@@ -1219,18 +1219,28 @@ return_t wish_build_signed_cert(wish_core_t *core, uint8_t *luid, const char* me
     
     size_t cert_buffer_len = 1024;
     char cert_buffer[cert_buffer_len];
+    memset(cert_buffer, 0, cert_buffer_len);
     bin cert = { .base = cert_buffer, .len = cert_buffer_len };
     if (wish_identity_export(core, &id, meta, &cert) != RET_SUCCESS) {
         WISHDEBUG(LOG_CRITICAL, "Could not export the identity");
         wish_identity_destroy(&id);
         return RET_FAIL;
     }
+   
+    /* Note: wish_identity_export puts the exported BSON to the bin struct 'cert', 
+     * but it does not do anything to the bin struct's size element!
+     * 
+     * In order to properly sign the certificate, we now need to know exactly 
+     * how long the exported cert is! */
+    bson b_cert;
+    bson_init_with_data(&b_cert, cert.base);
+    bin cert_to_sign = { .base = (char*)bson_data(&b_cert), .len = bson_size(&b_cert) };
     
     size_t signature_len = WISH_SIGNATURE_LEN;
     char signature_buffer[signature_len];
     bin signature = { .base = signature_buffer, .len = signature_len };
     
-    if (wish_identity_sign(core, &id, &cert, NULL, &signature) != RET_SUCCESS) {
+    if (wish_identity_sign(core, &id, &cert_to_sign, NULL, &signature) != RET_SUCCESS) {
         WISHDEBUG(LOG_CRITICAL, "Could not sign the identity");
         wish_identity_destroy(&id);
         return RET_FAIL;
