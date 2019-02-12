@@ -686,16 +686,18 @@ static void friend_req_callback(rpc_client_req* req, void* context, const uint8_
     wish_identity_t new_friend_id_from_local_db;
     memset(&new_friend_id_from_local_db, 0, sizeof (wish_identity_t));
     
-    wish_identity_load(connection->ruid, &new_friend_id_from_local_db);
+    if (wish_identity_load(connection->ruid, &new_friend_id_from_local_db) == RET_FAIL) {
+        WISHDEBUG(LOG_CRITICAL, "id load fail in friend_req_callback");
+        return;
+    }
     
     if (memcmp(new_friend_id_from_local_db.pubkey, new_friend_id_from_cert.pubkey, WISH_PUBKEY_LEN) != 0) {
         WISHDEBUG(LOG_CRITICAL, "Pubkey from cert sent by friend requestee does not match friend requested id!");
         wish_identity_destroy(&new_friend_id_from_local_db);
         return;
     }
-   
-#if 0 //Check of the signatures, non-working implementation 
-    // Verify that signature is by the new friend identity
+     
+    /* Verify that signature is by the new friend identity */
     bool signed_by_new_friend = false;
     for (int i = 0; i < 10; i++) {
         const int path_max_len = 32;
@@ -708,7 +710,7 @@ static void friend_req_callback(rpc_client_req* req, void* context, const uint8_
         
         if ( sign_type != BSON_BINDATA ) {
             //end of signatures
-            WISHDEBUG(LOG_CRITICAL, "end of sig, %s", path);
+            WISHDEBUG(LOG_CRITICAL, "The friend requestee's cert had %d signatures", i);
             break;
         }
         
@@ -737,19 +739,20 @@ static void friend_req_callback(rpc_client_req* req, void* context, const uint8_
             bson_append_binary(&data_meta_check_b, "meta", meta_data, meta_data_len);
             bson_finish(&data_meta_check_b);
    
-            bson_visit("to check: ", bson_data(&data_meta_check_b));
+            //bson_visit("to check: ", bson_data(&data_meta_check_b));
                
             const bin data_bin = { .base = (char *)bson_data(&data_meta_check_b), .len = bson_size(&data_meta_check_b) };
             const bin signature_bin = { .base = (char *) signature, .len = WISH_SIGNATURE_LEN };
-            return_t sig_check = wish_identity_verify(core, &new_friend_id_from_local_db, &data_bin, NULL, &signature_bin); 
+            return_t sig_check = wish_identity_verify(core, &new_friend_id_from_cert, &data_bin, NULL, &signature_bin); 
             if (sig_check == RET_SUCCESS) {
                 WISHDEBUG(LOG_CRITICAL, "Found friend cert OK signature");
+                signed_by_new_friend = true;
             }
             else if (sig_check == RET_E_INVALID_INPUT) {
                 WISHDEBUG(LOG_CRITICAL, "Found friend cert fails signature check, invalid input");
             }
             else {
-                WISHDEBUG(LOG_CRITICAL, "Found friend cert invalid signature, check fails", sig_check);
+                WISHDEBUG(LOG_CRITICAL, "Found friend cert invalid signature, check fails!");
             }
             bson_destroy(&data_meta_check_b);
             
@@ -759,7 +762,20 @@ static void friend_req_callback(rpc_client_req* req, void* context, const uint8_
             //TODO: check signature
         }
     }
-#endif
+    
+    wish_identity_destroy(&new_friend_id_from_local_db);
+    
+    if (signed_by_new_friend == false) {
+        //Something scary is going on... remove the new friend from our local db!
+        
+        WISHDEBUG(LOG_CRITICAL, "Removing the identity uid %02x %02x %02x... because friend requestee cert was not signed correctly.", connection->ruid[0], connection->ruid[1], connection->ruid[2], connection->ruid[3]);
+        //Before removing, check that friend has flag: unconfirmedFriendRequest?
+        wish_identity_remove(connection->core, connection->ruid);
+        //Emit "identity"?
+        wish_core_signals_emit_string(core, "identity");
+        
+        return;
+    }
     
     /* Add the friend request metadata to the internal identity structure */
     bson meta_bson;
@@ -798,6 +814,7 @@ static void friend_req_callback(rpc_client_req* req, void* context, const uint8_
     wish_core_signals_emit_string(core, "friendRequesteeAccepted");
 
     wish_close_connection(core, connection);
+    wish_identity_destroy(&new_friend_id_from_cert);
 }
 
 
@@ -818,6 +835,7 @@ static void friend_req_callback(rpc_client_req* req, void* context, const uint8_
 void wish_core_send_friend_req(wish_core_t* core, wish_connection_t* connection) {        
     size_t signed_cert_buffer_len = 1024;
     uint8_t signed_cert_buffer[signed_cert_buffer_len];
+    
     bin signed_cert = { .base = signed_cert_buffer, .len = signed_cert_buffer_len };
     
     if (wish_build_signed_cert(core, connection->luid, connection->friend_req_meta, &signed_cert) != RET_SUCCESS) {
