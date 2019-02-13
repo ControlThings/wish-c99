@@ -428,6 +428,30 @@ static void core_friend_req(rpc_server_req* req, const uint8_t* args) {
     bson_iterator cert_it;
     bson_iterator_from_buffer(&cert_it, cert);
     
+    uint8_t* uid_in_cert = NULL;
+    /* Parse out the uid in the certificate, and compare it with connection data. If they don't match, signal error */
+    if (bson_find_fieldpath_value("uid", &cert_it) != BSON_BINDATA) {
+        WISHDEBUG(LOG_CRITICAL, "uid is not bindata!");
+        rpc_server_error_msg(req, 503, "friend request args cert uid is not bindata!");
+        return;
+    }
+    else {
+        if (bson_iterator_bin_len(&cert_it) != WISH_ID_LEN) {
+            rpc_server_error_msg(req, 504, "friend req args cert uid is of bad length");
+            return;
+        }
+        uid_in_cert = (uint8_t*) bson_iterator_bin_data(&cert_it);
+        if (memcmp(new_friend_uid, uid_in_cert, WISH_ID_LEN) != 0) {
+            rpc_server_error_msg(req, 505, "friend req args cert uid and connection uid are not matching!");
+            return;
+        }
+        //WISHDEBUG(LOG_CRITICAL, "OK, cert uid matches connection data!");
+        
+        // TODO: Also check that pubkey matches?
+        
+    }
+    
+    bson_iterator_from_buffer(&cert_it, cert);
     if (bson_find_fieldpath_value("transports.0", &cert_it) != BSON_STRING) {
         WISHDEBUG(LOG_CRITICAL, "Friend request: no transports in data field!");
     }
@@ -499,6 +523,63 @@ static void core_friend_req(rpc_server_req* req, const uint8_t* args) {
     bson_init_with_data(&b, cert);
     
     wish_identity_from_bson(new_id, &b);
+    
+    /* Check if the identity already exists in database, that is that we are already friends */
+    if (wish_identity_exists(new_id->uid) > 0) {
+        WISHDEBUG(LOG_CRITICAL, "The friend already exists!");
+        
+        /* We are already friend with the party that sends friend request to us. 
+         * In this case, don't add the friend request to list, and don't emit signal. Instead,
+         * we immediately send our certificate, as is the friend request would have been accepted. */
+        
+        size_t signed_cert_buffer_len = 1024;
+#ifdef COMPILING_FOR_ESP8266
+        uint8_t *signed_cert_buffer = wish_platform_malloc(signed_cert_buffer_len);
+        if (signed_cert_buffer == NULL) {
+            WISHDEBUG(LOG_CRITICAL, "Out of memory in wish_api_identity_friend_request_accept (1)");
+            rpc_server_error_msg(req, 344, "Out of memory (1)");
+            return;
+        }
+#else
+        uint8_t signed_cert_buffer[signed_cert_buffer_len];
+#endif 
+        bin signed_cert = { .base = signed_cert_buffer, .len = signed_cert_buffer_len };
+
+        if (wish_build_signed_cert(core, recepient_uid, NULL, &signed_cert) == RET_FAIL) {
+            WISHDEBUG(LOG_CRITICAL, "Could not construct the signed cert");
+            return;
+        }
+
+        bson cert;
+        bson_init_with_data(&cert, signed_cert.base);
+
+#ifdef COMPILING_FOR_ESP8266
+        char *buf_base = wish_platform_malloc(WISH_PORT_RPC_BUFFER_SZ);
+        if (buf_base == NULL) {
+            WISHDEBUG(LOG_CRITICAL, "Out of memory in wish_api_identity_friend_request_accept (2)");
+            wish_platform_free(signed_cert_buffer);
+            rpc_server_error_msg(req, 344, "Out of memory (2)");
+            return;
+        }
+#else
+        char buf_base[WISH_PORT_RPC_BUFFER_SZ];
+#endif
+
+        bin buf;
+        buf.base = buf_base;
+        buf.len = WISH_PORT_RPC_BUFFER_SZ;
+
+        bson b;
+        bson_init_buffer(&b, buf.base, buf.len);
+        bson_append_bson(&b, "data", &cert);
+        bson_finish(&b);
+        rpc_server_send(req, bson_data(&b), bson_size(&b));
+
+        wish_close_connection(core, connection);
+        return;
+    }
+    
+    // When we get this far we known that the friend request was from somebody we did not know from before. Add to list, and emit signal.
     
     bson meta_bson;
     bson_init_with_data(&meta_bson, meta);
