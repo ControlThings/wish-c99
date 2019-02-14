@@ -700,7 +700,7 @@ static void friend_req_callback(rpc_client_req* req, void* context, const uint8_
                 //Emit "identity"?
                 wish_core_signals_emit_string(core, "identity");
                 //Emit "friendRequesteeDeclined"?
-                wish_core_signals_emit_string(core, "friendRequesteeDenied");
+                wish_core_signals_emit_string(core, "friendRequesteeDeclined");
                 return;
             }
             else {
