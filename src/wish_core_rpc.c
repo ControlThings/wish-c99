@@ -847,15 +847,19 @@ static void friend_req_callback(rpc_client_req* req, void* context, const uint8_
     wish_identity_destroy(&new_friend_id_from_local_db);
     
     if (signed_by_new_friend == false) {
-        //Something scary is going on... remove the new friend from our local db!
+        //Something scary is going on... remove the new friend from our local db?
+#if 0 /* Actually, because of a bug that was fixed in commit 8b496561d6, we cannot require friend request cert signatures be valid, if compatibility is required! */
         
-        WISHDEBUG(LOG_CRITICAL, "Removing the identity uid %02x %02x %02x... because friend requestee cert was not signed correctly.", connection->ruid[0], connection->ruid[1], connection->ruid[2], connection->ruid[3]);
+        WISHDEBUG(LOG_CRITICAL, "Removing the identity uid %02hhx %02hhx %02hhx %02hhx... because friend requestee cert was not signed correctly.", connection->ruid[0], connection->ruid[1], connection->ruid[2], connection->ruid[3]);
         //Before removing, check that friend has flag: unconfirmedFriendRequest?
         wish_identity_remove(connection->core, connection->ruid);
         //Emit "identity"?
         wish_core_signals_emit_string(core, "identity");
         
         return;
+#else
+        WISHDEBUG(LOG_CRITICAL, "Warning: could not verify friend requestee cert signature, uid: %02hhx %02hhx %02hhx %02hhx... but proceeding anyway.", connection->ruid[0], connection->ruid[1], connection->ruid[2], connection->ruid[3]);
+#endif
     }
     
     /* Add the friend request metadata to the internal identity structure */
