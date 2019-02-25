@@ -878,7 +878,8 @@ static void friend_req_callback(rpc_client_req* req, void* context, const uint8_
     int i = 0;
     for (i = 0; i < num_uids; i++) {
         if ( memcmp(&uid_list[i].uid, new_friend_id_from_cert.uid, WISH_ID_LEN) == 0 ) {
-            WISHDEBUG(LOG_CRITICAL, "New friend identity already in DB, we wont add it multiple times.");
+            /* The contact is already present in the database. This is normal, 
+             * because we add the contact to the database already when we send the friend request. */
             found = true;
             
             // TODO: Update alias, meta... based on cert that friend requestee sent
