@@ -420,7 +420,7 @@ void wish_ldiscover_advertize(wish_core_t* core, uint8_t* uid) {
         return; 
     }
 
-    const size_t msg_len = 2 + 2*(20 + WISH_ID_LEN) + 20 + WISH_PUBKEY_LEN + 10 + WISH_MAX_TRANSPORT_LEN + WISH_ALIAS_LEN;
+    const size_t msg_len = 2 + 2*(20 + WISH_ID_LEN) + 20 + WISH_PUBKEY_LEN + 10 + WISH_MAX_TRANSPORT_LEN + WISH_ALIAS_LEN + WISH_WLD_CLASS_MAX_LEN + 10;
     uint8_t msg[msg_len];
 
     msg[0] = 'W';
