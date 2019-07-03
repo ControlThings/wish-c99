@@ -17,14 +17,6 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
-
-#ifdef __APPLE__
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <ifaddrs.h>
-#include <stdio.h>
-#endif
-
 #include "wish_utils.h"
 #include "wish_local_discovery.h"
 #include "wish_debug.h"
@@ -364,27 +356,7 @@ static int append_transports_array(wish_core_t* core, bson* bs) {
     char host_part[WISH_MAX_TRANSPORT_LEN];
     
 #ifdef __APPLE__
-    struct ifaddrs *ifap, *ifa;
-    struct sockaddr_in *sa;
-    char *addr;
-    
-    getifaddrs (&ifap);
-    int c = 0;
-    for (ifa = ifap; ifa; ifa = ifa->ifa_next) {
-        if (ifa->ifa_addr->sa_family==AF_INET) {
-            if(c==0) { c++; continue; }
-            sa = (struct sockaddr_in *) ifa->ifa_addr;
-            addr = inet_ntoa(sa->sin_addr);
-            //printf("Interface: %s\tAddress: %s\n", ifa->ifa_name, addr);
-            wish_platform_sprintf(transport_url, "wish://%s:%d", addr, wish_get_host_port(core));
-            
-            bson_append_string(bs, "0", transport_url);
-            
-            freeifaddrs(ifap);
-            return 0;
-            break;
-        }
-    }
+
 #else
     if (wish_get_host_ip_str(core, host_part, WISH_MAX_TRANSPORT_LEN)) {
         WISHDEBUG(LOG_CRITICAL, "Could not get Host IP addr");

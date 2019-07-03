@@ -32,6 +32,12 @@
 #include<ifaddrs.h>
 #endif
 
+#ifdef __APPLE__
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <ifaddrs.h>
+#include <stdio.h>
+#endif
 
 #include<stdlib.h>
 #include<unistd.h>
@@ -45,8 +51,30 @@
  */
 static void find_local_ip_default_route(char *addr_buffer, 
         size_t addr_buffer_len) {
-#if defined(__APPLE__) || defined(_WIN32)
+#if defined(__APPLE__)
+    struct ifaddrs *ifap, *ifa;
+    struct sockaddr_in *sa;
+    char *addr;
     
+    getifaddrs (&ifap);
+    int c = 0;
+    for (ifa = ifap; ifa; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr->sa_family==AF_INET) {
+            if(c==0) { c++; continue; }
+            sa = (struct sockaddr_in *) ifa->ifa_addr;
+            addr = inet_ntoa(sa->sin_addr);
+            //printf("Interface: %s\tAddress: %s\n", ifa->ifa_name, addr);
+            strncpy(addr_buffer, addr, addr_buffer_len);
+            
+            freeifaddrs(ifap);
+            return;
+            break;
+        }
+    }
+#elif defined(_WIN32)
+    
+#warning find_local_ip_default_route is unimplemented for the win32 platform.
+
 #else
     FILE *f;
     char line[100] , *p=NULL , *c;
