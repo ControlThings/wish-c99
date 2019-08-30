@@ -23,7 +23,14 @@ extern "C" {
 #define WISH_MAX_SERVICES 10 /* contrast with NUM_WISH_APPS due to be removed in wish_app.h */
 
 #define WISH_ID_LEN     32
+
+#ifndef WISH_UID_LEN
 #define WISH_UID_LEN WISH_ID_LEN
+#else
+#if     WISH_UID_LEN != WISH_ID_LEN
+#error  A previous definition of WISH_UID_LEN is inconsistent, != 32!
+#endif
+#endif
 
 #define WISH_WHID_LEN   32
 #define WISH_WSID_LEN   32
