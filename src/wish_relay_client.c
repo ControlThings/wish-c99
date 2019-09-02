@@ -51,6 +51,11 @@ void relay_ctrl_disconnect_cb(wish_core_t* core, wish_relay_client_t *relay) {
     relay->last_input_timestamp = wish_time_get_relative(core);
 }
 
+/**
+ * Internal relay connection handler function, set up in wish_core_relay_client_init()
+ * 
+ * FIXME: Should this be merged with wish_relay_client_periodic, or vice-versa? 
+ */
 static void wish_core_relay_periodic(wish_core_t* core, void* ctx) {
     wish_relay_client_t* relay;
 
@@ -83,7 +88,9 @@ static void wish_core_relay_periodic(wish_core_t* core, void* ctx) {
                 }
                 break;
             case WISH_RELAY_CLIENT_RESOLVING:
-                //FIXME handle DNS resolve timeout it here vs. handle in port code? Now we handle it in port code...
+                if (wish_time_get_relative(core) > (relay->last_input_timestamp + RELAY_CLIENT_DNS_RESOLVE_TIMEOUT)) {
+                    wish_relay_client_close(core, relay);
+                }
                 break;
             default:
                 break;

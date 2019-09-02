@@ -35,6 +35,8 @@
 
 #define RELAY_CLIENT_CONNECT_TIMEOUT 30 /* Seconds */
 
+#define RELAY_CLIENT_DNS_RESOLVE_TIMEOUT 60 /* Seconds */
+
 #define RELAY_SESSION_ID_LEN 10
 
 enum wish_relay_client_state {
