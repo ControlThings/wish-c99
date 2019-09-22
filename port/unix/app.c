@@ -928,7 +928,7 @@ int main(int argc, char** argv) {
                     }
                     if (port_select_fd_is_readable(app_fds[i])) {
                         /* Existing App connection has become readable */
-                        size_t buffer_len = 100;
+                        size_t buffer_len = 1; //was 100 bytes. FIXME: Why do we need to read bytes one at a time to prevent incomplete read issues with very large RPC frames?
                         uint8_t buffer[buffer_len];
                         
                         int read_len = read(app_fds[i], buffer, buffer_len);

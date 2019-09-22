@@ -25,6 +25,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
+#include <assert.h>
 
 #ifdef _WIN32
 #include <inttypes.h>
@@ -68,13 +69,19 @@ void socket_set_nonblocking(int sockfd);
 
 int app_serverfd = 0;
 
-/* This array holds the fds for app connections */
+/* This array holds the fds for app connections 
+ * FIXME these separate arrays must be put into a shared structure representing an 'app connection' 
+ */
 int app_fds[NUM_APP_CONNECTIONS];
 enum app_state app_states[NUM_APP_CONNECTIONS];
 ring_buffer_t app_rx_ring_bufs[NUM_APP_CONNECTIONS];
 
 uint16_t app_transport_expect_bytes[NUM_APP_CONNECTIONS];
 enum app_transport_state app_transport_states[NUM_APP_CONNECTIONS];
+bool app_transport_cont_bytes_flag[NUM_APP_CONNECTIONS];
+uint8_t* app_transport_cont_bytes_buffer[NUM_APP_CONNECTIONS];
+size_t app_transport_cont_bytes_total[NUM_APP_CONNECTIONS];
+size_t app_transport_cont_bytes_so_far[NUM_APP_CONNECTIONS];
 
 struct app_entry {
     uint8_t wsid[WISH_WSID_LEN];
@@ -153,33 +160,48 @@ void send_core_to_app_via_tcp(wish_core_t* core, const uint8_t wsid[WISH_ID_LEN]
     for (i = 0; i < NUM_APP_CONNECTIONS; i++) {
         if (memcmp(apps[i].wsid, wsid, WISH_ID_LEN) == 0) {
             /* Found our app connection */
-            
-            uint16_t frame_len =  ((len & 0xff) << 8) | (len >> 8);
-            
-            char* p = (char*)&frame_len;
-            //printf("Found app connection, going to send %lu bytes, setting frame len to 0x%02x%02x\n", len, p[0] & 0xff, p[1] & 0xff);
+            size_t sent_len = 0;
 
-            char buf_c[65535];
-            char* buf = buf_c;
-            
-            memcpy(buf, p, 2);
-            memcpy(buf+2, data, len);
-            
-#ifdef __APPLE__
-            ssize_t write_ret = send(app_fds[i], buf, 2+len, SO_NOSIGPIPE);
-#else
-#ifdef _WIN32
-            ssize_t write_ret = send(app_fds[i], buf, 2+len, 0);
-#else
-            ssize_t write_ret = send(app_fds[i], buf, 2+len, MSG_NOSIGNAL);
-#endif
-#endif
-            
-            if (write_ret != 2+len) {
-                //printf("App connection: Write error! (c) Wanted %i got %zd\n", 2, write_ret);
-                //close(app_fds[i]);
-                return;
-            }
+            do {
+                const size_t frame_max_len = 65535-2;
+                uint16_t frame_len = (len -sent_len) > frame_max_len ? frame_max_len: (len - sent_len); // ((len & 0xff) << 8) | (len >> 8);
+
+                char hdr[2];
+    #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+                hdr[0] = frame_len & 0xff;
+                hdr[1] = frame_len >> 8;
+    #else 
+                hdr[0] = frame_len >> 8;
+                hdr[1] = frame_len & 0xff;
+    #endif   
+                
+                //char* p = (char*)&frame_len;
+                //printf("Found app connection, going to send %lu bytes, setting frame len to 0x%02x%02x\n", len, p[0] & 0xff, p[1] & 0xff);
+
+                char buf_c[65535];
+                char* buf = buf_c;
+                
+                memcpy(buf, hdr, 2);
+                memcpy(buf+2, data+sent_len, frame_len);
+                
+    #ifdef __APPLE__
+                ssize_t write_ret = send(app_fds[i], buf, 2+frame_len, SO_NOSIGPIPE);
+    #else
+    #ifdef _WIN32
+                ssize_t write_ret = send(app_fds[i], buf, 2+frame_len, 0);
+    #else
+                ssize_t write_ret = send(app_fds[i], buf, 2+frame_len, MSG_NOSIGNAL);
+    #endif
+    #endif
+                
+                if (write_ret != 2+frame_len) {
+                    //printf("App connection: Write error! (c) Wanted %i got %zd\n", 2, write_ret);
+                    //close(app_fds[i]);
+                    return;
+                }
+                sent_len += frame_len;
+                assert(sent_len <= len);
+            } while (sent_len < len);
             return;
         }
     }
@@ -272,17 +294,52 @@ again:
                     bson_visit("Bad login message!", payload);
                 }
             }
-            
+
             bson bs;
-            bson_init_with_data(&bs, payload);
+            if (app_transport_cont_bytes_flag[i]) {
+                /* Handle that a previous frame was the start of a large BSON structure, which did not fit one frame. */
+                memcpy(app_transport_cont_bytes_buffer[i] + app_transport_cont_bytes_so_far[i], payload, expect_len);
+                app_transport_cont_bytes_so_far[i] += expect_len;
+
+                if (app_transport_cont_bytes_so_far[i] < app_transport_cont_bytes_total[i]) {
+                    /* BSON still not received completely, still more frames to come! */
+                    goto again;
+                }
+
+                /* All bytes comprising the BSON structure have now arrived */
+                
+                assert(app_transport_cont_bytes_so_far[i] == app_transport_cont_bytes_total[i]);
+                bson_init_with_data(&bs, app_transport_cont_bytes_buffer[i]);
+                receive_app_to_core(core, apps[i].wsid, app_transport_cont_bytes_buffer[i], bson_size(&bs) );
+
+                /* reset the state */
+                app_transport_cont_bytes_flag[i] = false;
+                free(app_transport_cont_bytes_buffer[i]);
+                app_transport_cont_bytes_so_far[i] = 0;
+                app_transport_cont_bytes_total[i] = 0;
+            }
+            else {
             
-            if ( bson_size(&bs) != expect_len ) {
-                WISHDEBUG(LOG_CRITICAL, "Payload size mismatch, %i while expecting %i", bson_size(&bs), expect_len);
-                app_transport_states[i] = APP_TRANSPORT_CLOSING;
-                break;
+                bson_init_with_data(&bs, payload);
+            
+                if ( bson_size(&bs) > expect_len) {
+                    /* The BSON data did not fit in one app-to-core frame, wait for more, which will be then assembled into one  */
+                    app_transport_cont_bytes_so_far[i] = expect_len;
+                    app_transport_cont_bytes_total[i] =  bson_size(&bs);
+                    app_transport_cont_bytes_buffer[i] = malloc(bson_size(&bs));
+                    app_transport_cont_bytes_flag[i] = true;
+                    memcpy(app_transport_cont_bytes_buffer[i], payload, expect_len);
+                    goto again;
+                }
+                else if ( bson_size(&bs) != expect_len ) {
+                    WISHDEBUG(LOG_CRITICAL, "Payload size mismatch, %i while expecting %i", bson_size(&bs), expect_len);
+                    app_transport_states[i] = APP_TRANSPORT_CLOSING;
+                    break;
+                }
+                /* A BSON structure fitting in one app-to-core transport frame was received */
+                receive_app_to_core(core, apps[i].wsid, payload, expect_len );
             }
 
-            receive_app_to_core(core, apps[i].wsid, payload, expect_len);
             if (ring_buffer_length(&app_rx_ring_bufs[i]) >= 2) {
                 goto again;
             }
