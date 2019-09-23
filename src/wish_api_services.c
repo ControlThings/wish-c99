@@ -30,7 +30,7 @@
  *     ]
  */
 void wish_api_services_send(rpc_server_req* req, const uint8_t* args) {
-    bson_visit("Handling services.send", args);
+    //bson_visit("Handling services.send", args);
     
     wish_core_t* core = (wish_core_t*) req->server->context;
     wish_app_entry_t* app = (wish_app_entry_t*) req->context;
@@ -119,8 +119,8 @@ void wish_api_services_send(rpc_server_req* req, const uint8_t* args) {
     
     int payload_len = bson_iterator_bin_len(&it);
     const uint8_t* payload = bson_iterator_bin_data(&it);
-    bson_visit("Handling services.send, payload:", payload);
-    WISHDEBUG(LOG_CRITICAL, "payload_len = %i", payload_len);
+    //bson_visit("Handling services.send, payload:", payload);
+    //WISHDEBUG(LOG_CRITICAL, "payload_len = %i", payload_len);
 
     /* First, check if message is to be delivered to some of our local services.
      * In this case we very if the message's rhid corresponds to our local core's rhid 
