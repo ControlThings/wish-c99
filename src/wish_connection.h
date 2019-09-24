@@ -173,6 +173,14 @@ struct wish_context {
     bool friend_req_connection;
     const char* friend_req_meta;
     wish_remote_app* apps;
+    /** This flag 'continued frame' is set, if we are currently handling a core-core BSON structure that is larger than maximal size  of transport frame */
+    bool cont_frame;
+    /** When handling 'continued frame', this is the total expected length of the BSON structure */
+    int32_t cont_frame_total_len;
+    /** When handling 'continued frame', this is the number of bytes received so far */
+    int32_t cont_frame_received_len;
+    /** When handling 'continued frame', this is the array where the fragments of the BSON data will be copied in from the constituent frames */
+    uint8_t *cont_bytes;
 #ifdef WISH_CORE_DEBUG
     int bytes_in;
     int bytes_out;

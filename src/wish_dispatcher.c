@@ -268,13 +268,50 @@ int32_t generate_service_msg_id(void) {
 }
 
 
-void wish_core_process_message(wish_core_t* core, wish_connection_t* ctx, uint8_t* msg) {
+void wish_core_process_message(wish_core_t* core, wish_connection_t* ctx, uint8_t* msg_in, size_t msg_len) {
+    uint8_t *msg = NULL;
     /* If you want to print out the on-wire message, now would be the
      * time */
     bool wire_debug = false;
     if (wire_debug) {
         bson_visit("Incoming message", msg);
     }
+
+    if (ctx->cont_frame) {
+        memcpy(ctx->cont_bytes + ctx->cont_frame_received_len, msg_in, msg_len);
+        ctx->cont_frame_received_len += msg_len;
+        if (ctx->cont_frame_received_len < ctx->cont_frame_total_len) {
+            return;
+        }
+        else if (ctx->cont_frame_received_len == ctx->cont_frame_total_len) {
+            msg = ctx->cont_bytes;
+            /* Message is now complete, continue now with normal processing */
+        }
+        else {
+            WISHDEBUG(LOG_CRITICAL, "Very unexpected!");
+            return;
+        }
+    }
+    else {
+        bson bs;
+        bson_init_with_data(&bs, msg_in);
+
+        if (bson_size(&bs) > msg_len) {
+            /* Must start handling continued frame */
+            ctx->cont_frame = true;
+            ctx->cont_frame_total_len = bson_size(&bs);
+            ctx->cont_frame_received_len = msg_len;
+            ctx->cont_bytes = wish_platform_malloc(ctx->cont_frame_total_len);
+            memcpy(ctx->cont_bytes, msg_in, msg_len);
+            return;
+        }
+        else {
+            /* Message fits in one single frame */
+            msg = msg_in;
+        }
+    }
+
+    /* Large BSON messages that do not fit in one frame must be handled here */
 
     /* Read the top-level and 'req'(uest), 'res'(ponse)
      * If 'req', then feed to an instance of wish-rpc server
@@ -297,6 +334,13 @@ void wish_core_process_message(wish_core_t* core, wish_connection_t* ctx, uint8_
         // received a pong, but won't do much with it here.
     } else {
         WISHDEBUG(LOG_CRITICAL, "Unknown message on wire!");
+    }
+
+    if (ctx->cont_frame) {
+        ctx->cont_frame_received_len = 0;
+        ctx->cont_frame_total_len = 0;
+        wish_platform_free(ctx->cont_bytes);
+        ctx->cont_bytes = NULL;
     }
 }
 

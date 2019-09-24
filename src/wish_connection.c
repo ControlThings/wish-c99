@@ -1024,7 +1024,7 @@ void wish_core_handle_payload(wish_core_t* core, wish_connection_t* connection, 
 
             uint8_t* plaintxt = (uint8_t*) wish_platform_malloc(plaintxt_len);
             if (plaintxt == NULL) {
-                WISHDEBUG(LOG_CRITICAL, "Could not allocate memory");
+                WISHDEBUG(LOG_CRITICAL, "Could not allocate memory, %i bytes", plaintxt_len);
                 wish_close_connection(core, connection);
                 break;
             }
@@ -1040,7 +1040,7 @@ void wish_core_handle_payload(wish_core_t* core, wish_connection_t* connection, 
                 break;
             }
             wish_debug_print_array(LOG_TRIVIAL, "Plaintext", plaintxt, len);
-            wish_core_process_message(core, connection, plaintxt);
+            wish_core_process_message(core, connection, plaintxt, plaintxt_len);
             wish_platform_free(plaintxt);
         }
         break;
@@ -1295,7 +1295,7 @@ uint16_t uint16_native2be(uint16_t in) {
 /**
  * @return 0, if sending succeeds, else non-zero for an error
  */
-int wish_core_send_message(wish_core_t* core, wish_connection_t* connection, const uint8_t* payload_clrtxt, int payload_len) {
+static int wish_core_send_message_inner(wish_core_t* core, wish_connection_t* connection, const uint8_t* payload_clrtxt, int payload_len) {
     if (connection->context_state == WISH_CONTEXT_FREE) {
         WISHDEBUG(LOG_CRITICAL, "Attempt to send data on a connection which is not connected");
         return 1;
@@ -1360,6 +1360,20 @@ int wish_core_send_message(wish_core_t* core, wish_connection_t* connection, con
     wish_platform_free(frame);
     WISHDEBUG(LOG_DEBUG, "Exiting");
     return ret;
+}
+
+int wish_core_send_message(wish_core_t* core, wish_connection_t* connection, const uint8_t* payload_clrtxt, int payload_len) {
+    const size_t max_frame_len = 30*1024; //FIXME max frame len actually depends on what is the maximum size the receiver can handle!
+    int32_t sent_len = 0;
+
+    do {
+        int frame_len = (payload_len - sent_len) > max_frame_len ? max_frame_len : (payload_len - sent_len);
+        WISHDEBUG(LOG_WIRE, "frame_len %i bytes", frame_len);
+        wish_core_send_message_inner(core, connection, payload_clrtxt + sent_len, frame_len);
+        sent_len += frame_len;
+    } while (sent_len < payload_len);
+    
+    return 0; //FIXME now we disregard the actual return value from wish_core_send_message_inner, and always return success!
 }
 
 

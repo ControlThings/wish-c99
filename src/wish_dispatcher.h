@@ -27,7 +27,7 @@ void wish_core_create_handshake_msg(wish_core_t* core, wish_connection_t* conn, 
 void wish_core_update_transports_from_handshake(wish_core_t *core, wish_connection_t *connection, uint8_t *handshake_msg);
 
 /* Submit an actual Wish service message */
-void wish_core_process_message(wish_core_t* core, wish_connection_t* ctx, uint8_t* bson_doc);
+void wish_core_process_message(wish_core_t* core, wish_connection_t* ctx, uint8_t* msg, size_t msg_len);
 
 void wish_core_process_service_meta(wish_core_t* core, wish_connection_t* ctx,
 uint8_t* service_reply_doc);
