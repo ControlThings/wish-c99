@@ -326,7 +326,7 @@ static void process_cmdline_opts(int argc, char** argv) {
             advertize_own_uid = false;
             break;
         case 'i':
-            //printf("Skip connection acl (Core is Claimable)\n");
+            printf("Skip connection acl (Core is Claimable)\n");
             skip_connection_acl = true;
             break;
         case 'l':
@@ -848,7 +848,7 @@ int main(int argc, char** argv) {
                         }
                         if (connect_error == 0) {
                             /* connect() succeeded, the connection is open */
-                            printf("Relay client connected\n");
+                            //printf("Relay client connected\n");
                             relay_ctrl_connected_cb(core, relay);
                             wish_relay_client_periodic(core, relay);
                         }
@@ -877,7 +877,7 @@ int main(int argc, char** argv) {
                             wish_relay_client_periodic(core, relay);
                         }
                         else if (read_len == 0) {
-                            printf("Relay control connection disconnected\n");
+                            //printf("Relay control connection disconnected\n");
                             close(relay->sockfd);
                             relay_ctrl_disconnect_cb(core, relay);
                             relay->sockfd = -1;
