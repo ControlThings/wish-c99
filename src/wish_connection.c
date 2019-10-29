@@ -221,7 +221,7 @@ bool wish_core_is_connected_luid_ruid(wish_core_t* core, uint8_t *luid, uint8_t 
                     retval = true;
                     break;
                 case WISH_CONTEXT_IN_MAKING:
-                    WISHDEBUG(LOG_CRITICAL, "Already connecting");
+                    //WISHDEBUG(LOG_CRITICAL, "Already connecting");
                     retval = true;
                     break;
                 case WISH_CONTEXT_CLOSING:
