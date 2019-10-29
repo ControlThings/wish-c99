@@ -128,7 +128,7 @@ void connected_cb_relay(wish_connection_t* connection) {
 }
 
 void connect_fail_cb(wish_connection_t* connection) {
-    printf("Connect fail... \n");
+    //printf("Connect fail... \n");
     wish_core_signal_tcp_event(connection->core, connection, TCP_DISCONNECTED);
 }
 
@@ -228,7 +228,7 @@ int wish_open_connection(wish_core_t* core, wish_connection_t* connection, wish_
         }
     }
     else if (ret == 0) {
-        printf("Cool, connect succeeds immediately!\n");
+        //printf("Cool, connect succeeds immediately!\n");
         if (connection->via_relay) {
             connected_cb_relay(connection);
         }
@@ -1035,8 +1035,7 @@ int main(int argc, char** argv) {
                     else {
                         /* connect fails. Note that perror() or the
                          * global errno is not valid now */
-                        printf("wish connection connect() failed: %s\n", 
-                            strerror(connect_error));
+                        //printf("wish connection connect() failed: %s\n", strerror(connect_error));
                         close(*((int*) ctx->send_arg));
                         free(ctx->send_arg);
                         connect_fail_cb(ctx);

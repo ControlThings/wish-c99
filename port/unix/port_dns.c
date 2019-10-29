@@ -220,13 +220,13 @@ int port_dns_start_resolving_wish_conn(wish_connection_t *conn, char *qname) {
         }
     }
     
-    WISHDEBUG(LOG_CRITICAL, "Starting resolving %s (resolver %p, wish connection %p)", qname, resolver, conn);
+    //WISHDEBUG(LOG_CRITICAL, "Starting resolving %s (resolver %p, wish connection %p)", qname, resolver, conn);
     
     return 0;
 }
 
 int port_dns_start_resolving_relay_client(wish_relay_client_t *rc, char *qname) {
-    WISHDEBUG(LOG_CRITICAL, "Starting resolving %s (relay client)\n", qname);
+    //WISHDEBUG(LOG_CRITICAL, "Starting resolving %s (relay client)\n", qname);
     struct port_dns_resolver *resolver = port_dns_resolver_create(qname);
     if (resolver != NULL) {
         resolver->relay_client = rc;
@@ -280,7 +280,7 @@ int port_dns_poll_resolvers(void) {
                         if (rr.section == DNS_S_AN && rr.class == DNS_C_IN && rr.type == DNS_T_A) {
                             char pretty[256];
                             if ((len = dns_rr_addr_print(pretty, sizeof pretty, &rr, ans, &error))) {
-                                WISHDEBUG(LOG_CRITICAL, "Resolved to: %s (%p)", pretty, resolver);
+                                //WISHDEBUG(LOG_CRITICAL, "Resolved to: %s (%p)", pretty, resolver);
                                 
                                 //Continue opening the connection with new info (connection or relay client)
                                 if (resolver->wish_conn) {
