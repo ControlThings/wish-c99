@@ -14,7 +14,7 @@
  */
 #pragma once
 
-#define NUM_APP_CONNECTIONS 20
+#define NUM_APP_CONNECTIONS 100
 
 #define APP_RX_RB_SZ 64*1024-1
 

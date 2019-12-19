@@ -18,9 +18,13 @@
 extern "C" {
 #endif
 
+#include "wish_port_config.h"
+
 #define WISH_CONTEXT_POOL_SZ (WISH_PORT_CONTEXT_POOL_SZ)
 
+#ifndef WISH_MAX_SERVICES
 #define WISH_MAX_SERVICES 10 /* contrast with NUM_WISH_APPS due to be removed in wish_app.h */
+#endif
 
 #define WISH_ID_LEN     32
 
