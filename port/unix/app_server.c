@@ -122,7 +122,7 @@ void setup_app_server(wish_core_t* core, uint16_t app_port) {
         perror("ERROR on binding");
         abort();
     }
-    int connection_backlog = 1;
+    int connection_backlog = NUM_APP_CONNECTIONS;
     if (listen(app_serverfd, connection_backlog) < 0) {
         perror("listen()");
     }

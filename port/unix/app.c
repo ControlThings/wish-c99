@@ -567,7 +567,7 @@ void setup_wish_server(wish_core_t* core) {
         printf("setup_wish_server: Trying to bind port %d failed.\n", server_addr.sin_port);
         abort();
     }
-    int connection_backlog = 1;
+    int connection_backlog = WISH_PORT_CONTEXT_POOL_SZ;
     if (listen(serverfd, connection_backlog) < 0) {
         perror("listen()");
     }
