@@ -1262,7 +1262,18 @@ void wish_core_handle_payload(wish_core_t* core, wish_connection_t* connection, 
                         .context = connection };
                     wish_message_processor_notify(&evt);
                     /* Remove "connect: false" from meta if it exists, we have now been again contacted by the remote! */
-                    wish_identity_remove_meta_connect(core, connection->ruid); 
+                    //WISHDEBUG(LOG_CRITICAL, "here would be removing meta connect");
+
+                    wish_identity_t id = { 0 };
+                    if ( wish_identity_load(connection->ruid, &id) != RET_SUCCESS ) {
+                        WISHDEBUG(LOG_CRITICAL, "ERROR: could not load identity, when checking if connect: metadata exists.");
+                    }
+                    else {
+                        if (wish_identity_get_meta_connect(&id) == false) {
+                            wish_identity_remove_meta_connect(core, connection->ruid);
+                        }
+                    }
+                    wish_identity_destroy(&id);
                 }
             }
             /* Finished processing the handshake */

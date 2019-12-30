@@ -118,26 +118,30 @@ void wish_core_update_transports_from_handshake(wish_core_t *core, wish_connecti
     bson_iterator it;
     
     if ( wish_identity_load(connection->ruid, &id) == RET_SUCCESS ) {
+        char new_transports[WISH_MAX_TRANSPORTS][WISH_MAX_TRANSPORT_LEN] = { 0 };
+
         bool found_transports = false;
         /* Clear existing transports, and replace them with transports provided by remote party */
         /* FIXME append to transport list - instead of overwriting - the old transports should be deprecated later when we discover that they are no longer valid */
-        memset(id.transports, 0, WISH_MAX_TRANSPORTS*WISH_MAX_TRANSPORT_LEN);
+        //memset(id.transports, 0, WISH_MAX_TRANSPORTS*WISH_MAX_TRANSPORT_LEN);
         for (int i = 0; i < WISH_MAX_TRANSPORTS; i++) {
             const size_t path_max_len = 16;
             char path[path_max_len];
             wish_platform_snprintf(path, path_max_len, "transports.%d", i);
             bson_iterator_from_buffer(&it, handshake_msg);
             if (bson_find_fieldpath_value(path, &it) == BSON_STRING) {
-                strncpy(&id.transports[i][0], bson_iterator_string(&it), WISH_MAX_TRANSPORT_LEN);
                 found_transports = true;
+                strncpy(&new_transports[i][0], bson_iterator_string(&it), WISH_MAX_TRANSPORT_LEN);
             }
         }
 
         if (!found_transports) {
             WISHDEBUG(LOG_CRITICAL, "No transports were reported by remote!");
         }
-        else {
+        else if (memcmp(id.transports, new_transports, WISH_MAX_TRANSPORTS*WISH_MAX_TRANSPORT_LEN) != 0) {
             /* Save the remote identity updated with transports */
+            //WISHDEBUG(LOG_CRITICAL, "Updating transports.");
+            memcpy(id.transports, new_transports, WISH_MAX_TRANSPORTS*WISH_MAX_TRANSPORT_LEN);
             wish_identity_update(core, &id);
         }
     }
