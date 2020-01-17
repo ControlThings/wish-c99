@@ -37,7 +37,7 @@ return_t wish_parse_transport_ip_port(const char *url, size_t url_len, wish_ip_a
 return_t wish_parse_transport_host_port(const char *url, size_t url_len, char *host, uint16_t *port) {
     return_t ret = RET_FAIL;
     
-    char *colon_ptr = strrchr(url, ':');
+    char *colon_ptr = strrchr(url, ':'); //This is suppose to find the colon preceding port number. But it will not work correctly for "wish://... see below."
     if (colon_ptr == NULL) {
         return RET_FAIL;
     }
@@ -48,6 +48,10 @@ return_t wish_parse_transport_host_port(const char *url, size_t url_len, char *h
         actual_hostname = (char*) url;
     }
     else {
+        if (colon_ptr < actual_hostname) {
+            /* This special case occurs when this function is just supplied with: "wish://" */
+            return RET_FAIL;
+        } 
         actual_hostname += 1; //advance past the last '/' of url
     }
     

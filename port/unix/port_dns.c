@@ -199,7 +199,7 @@ void port_dns_resolver_cancel_by_relay_client(wish_relay_client_t *rc) {
 }
 
 int port_dns_start_resolving_wish_conn(wish_connection_t *conn, char *qname) {
-    
+    //WISHDEBUG(LOG_CRITICAL, "Starting resolving %s (wish conn)\n", qname);
     struct port_dns_resolver *resolver = port_dns_resolver_create(qname);
     if (resolver != NULL) {
         resolver->wish_conn = conn;
@@ -286,7 +286,11 @@ int port_dns_poll_resolvers(void) {
                                 if (resolver->wish_conn) {
                                     /* We were resolving for a normal wish connection */
                                     wish_ip_addr_t ip;
-                                    wish_parse_transport_ip(pretty, 0, &ip);
+
+                                    return_t ret = wish_parse_transport_ip(pretty, 0, &ip);
+                                    if (ret != RET_SUCCESS) {
+                                        break;
+                                    }
                                     
                                     /* References to wish core, port and via relay are already initialized by wish_open_connection_dns */
                                     wish_core_t *core = resolver->wish_conn->core;
@@ -298,7 +302,11 @@ int port_dns_poll_resolvers(void) {
                                 else if (resolver->relay_client) {
                                     /* We were resolving for a relay client connection */
                                     wish_ip_addr_t ip;
-                                    wish_parse_transport_ip(pretty, 0, &ip);
+                                    
+                                    return_t ret = wish_parse_transport_ip(pretty, 0, &ip);
+                                    if (ret != RET_SUCCESS) {
+                                        break;
+                                    } 
                                     port_relay_client_open(resolver->relay_client, &ip);
                                 }                            
                                 break; //while loop testing dns_rr_grep()
