@@ -108,7 +108,12 @@ static int wish_core_get_num_relays(wish_core_t *core) {
 void wish_core_relay_client_init(wish_core_t* core) {
     if (wish_core_get_num_relays(core) == 0) {
         /* If there are no relay servers configured, add our 'preferred' relay server */
-        wish_relay_client_add(core, RELAY_SERVER_HOST);
+        if (strnlen(RELAY_SERVER_HOST, RELAY_SERVER_HOST_MAX_LEN) > 0) {
+            wish_relay_client_add(core, RELAY_SERVER_HOST);
+        }
+        else {
+            WISHDEBUG(LOG_CRITICAL, "Preferred relay host len is 0.");
+        }
     }
     
     wish_core_time_set_interval(core, wish_core_relay_periodic, NULL, 1);
