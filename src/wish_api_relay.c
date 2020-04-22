@@ -42,8 +42,8 @@ void wish_api_relay_list(rpc_server_req* req, const uint8_t* args) {
         char index[21];
         BSON_NUMSTR(index, i);
         
-        char host[RELAY_SERVER_HOST_MAX_LEN];
-        wish_platform_snprintf(host, RELAY_SERVER_HOST_MAX_LEN, "%s:%d", relay->host, relay->port);
+        char host[RELAY_SERVER_HOST_PORT_MAX_LEN];
+        wish_platform_snprintf(host, RELAY_SERVER_HOST_PORT_MAX_LEN, "%s:%d", relay->host, relay->port);
         
         bson_append_start_object(&bs, index);
         bson_append_string(&bs, "host", host);

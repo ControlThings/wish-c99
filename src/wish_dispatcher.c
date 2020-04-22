@@ -185,7 +185,7 @@ void wish_core_create_handshake_msg(wish_core_t* core, wish_connection_t* conn, 
         char index[21];
         BSON_NUMSTR(index, i++);
         
-        size_t transport_max_len = RELAY_SERVER_HOST_MAX_LEN + 8;
+        size_t transport_max_len = RELAY_SERVER_HOST_URL_MAX_LEN;
         char host[transport_max_len];
         
         wish_platform_snprintf(host, transport_max_len, "wish://%s:%d", relay->host, relay->port);

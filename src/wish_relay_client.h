@@ -23,6 +23,8 @@
 #include "wish_utils.h"
 
 #define RELAY_SERVER_HOST_MAX_LEN   64
+#define RELAY_SERVER_HOST_PORT_MAX_LEN (RELAY_SERVER_HOST_MAX_LEN + 1 + 5 + 1)  // str(RELAY_SERVER_HOST_MAX_LEN) + ":" + str(5) + termination
+#define RELAY_SERVER_HOST_URL_MAX_LEN (7 + RELAY_SERVER_HOST_PORT_MAX_LEN)  //the string "wish://" + str(RELAY_SERVER_HOST_MAX_LEN) + ":" + str(5) + termination
 
 /* Define Relay server IP and port: */
 #ifndef RELAY_SERVER_HOST
