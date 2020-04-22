@@ -1,5 +1,7 @@
 #include <stddef.h>
 #include <stdbool.h>
+#include <errno.h>
+#include <stdio.h>
 
 #ifdef _WIN32
 #include <sys/time.h>
@@ -55,7 +57,15 @@ int port_select(void) {
     tv.tv_sec = 0;
     tv.tv_usec = 100000;
     
-    return select(max_fd, &rfds, &wfds, NULL, &tv); /* Note: exceptfds is NULL, because we do not expect to handle TCP out-of-band data from the sockets */
+    int select_ret =  select(max_fd, &rfds, &wfds, NULL, &tv); /* Note: exceptfds is NULL, because we do not expect to handle TCP out-of-band data from the sockets */
+
+    if (select_ret == -1) {
+        if (errno == EBADF) {
+            /* Knowing max_fd's value could be interesing since select(2) return EBADF if an fd larger than FD_SETSIZE was included in any of the fd sets */
+            fprintf(stderr, "select(2) returned EBADF, current max_fd is %i\n", max_fd);
+        }
+    }
+    return select_ret;
 }
 
 /** 
