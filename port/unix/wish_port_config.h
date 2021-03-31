@@ -24,7 +24,7 @@
  * Unix port uses select(2), which has limitation FD_SETSIZE = 1024, and all filedescriptors must also have value less than this.
  * So number of wish connections, and app connections, and open files at any moment must be less than 1024.
  * */
-#define WISH_PORT_CONTEXT_POOL_SZ   768
+#define WISH_PORT_CONTEXT_POOL_SZ  1000
 
 /** This specifies the maximum number of simultaneous app requests to core */
 #define WISH_PORT_APP_RPC_POOL_SZ ( 60 )
