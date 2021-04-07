@@ -17,7 +17,7 @@
 /** Port-specific config variables */
 
 /** This specifies the size of the receive ring buffer */
-#define WISH_PORT_RX_RB_SZ ( 32*1024 )
+#define WISH_PORT_RX_RB_SZ ( 64*1024 )
 
 /** This specifies the maximum number of simultaneous Wish connections.
  * 
@@ -30,7 +30,7 @@
 #define WISH_PORT_APP_RPC_POOL_SZ ( 60 )
 
 /** This specifies the maximum size of the buffer where some RPC handlers build the reply */
-#define WISH_PORT_RPC_BUFFER_SZ ( 65*1024 )
+#define WISH_PORT_RPC_BUFFER_SZ ( 512*1024 )
 
 /** This defines the maximum number of entries in the Wish local discovery table */
 #define WISH_LOCAL_DISCOVERY_MAX ( 64 )
