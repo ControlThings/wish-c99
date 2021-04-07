@@ -17,7 +17,7 @@
 /** Port-specific config variables */
 
 /** This specifies the size of the receive ring buffer */
-#define WISH_PORT_RX_RB_SZ ( 64*1024 )
+#define WISH_PORT_RX_RB_SZ ( 32*1024 )
 
 /** This specifies the maximum number of simultaneous Wish connections.
  * 
