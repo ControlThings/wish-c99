@@ -23,6 +23,8 @@ Wish key features and APIs
 * C compiler, gcc or clang. On MacOSX, the clang compiler is installed as a part Xcode.
 * cmake, which is available via your operating system's package repository.
 
+NOTE: Build fails on gcc version 9.3.0 (Ubuntu 9.3.0-17ubuntu1~20.04). Use for example gcc 7.5.0.
+
 ```sh
 git submodule init
 git submodule update
